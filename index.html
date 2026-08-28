@@ -123,13 +123,30 @@
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { createChart, ColorType } from 'https://esm.sh/lightweight-charts@4.1.3';
+import { createChart, ColorType, LineStyle } from 'https://esm.sh/lightweight-charts@4.1.3';
 
 // ---- fill these in ----
 const SUPABASE_URL = "https://mysnmwptbnzlkggwmmoe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15c25td3B0Ym56bGtnZ3dtbW9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NTE4NDIsImV4cCI6MjEwMzQyNzg0Mn0.HY1ymIQg-nTwUDrplcjllJJJU1tnrcady_DiXQd5ims";
-const TWELVE_DATA_API_KEY = "ab4b690529224b45bd267aac87c7287c"; // optional — leave blank to skip candles and just show levels
+const TWELVE_DATA_API_KEY = "ab4b690529224b45bd267aac87c7287c";
 // ------------------------
+
+// Twelve Data covers forex + metals cleanly — real candles at the real price scale.
+// Indices/oil (US30, NAS100, DXY, USOIL) aren't available on the free tier as raw
+// index prices, and ETF proxies (DIA/QQQ/UUP/USO) trade at a totally different scale
+// than the index itself, so your level lines wouldn't line up — we skip candles for
+// those and just auto-scale the chart to the levels instead.
+const TWELVE_DATA_SYMBOL_MAP = {
+  XAUUSD: 'XAU/USD', XAGUSD: 'XAG/USD',
+  EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', USDCHF: 'USD/CHF',
+  AUDUSD: 'AUD/USD', NZDUSD: 'NZD/USD', USDCAD: 'USD/CAD',
+  EURGBP: 'EUR/GBP', EURJPY: 'EUR/JPY', GBPJPY: 'GBP/JPY',
+  AUDJPY: 'AUD/JPY', AUDCHF: 'AUD/CHF', AUDCAD: 'AUD/CAD',
+  CADJPY: 'CAD/JPY', CHFJPY: 'CHF/JPY', NZDJPY: 'NZD/JPY',
+  EURAUD: 'EUR/AUD', EURCHF: 'EUR/CHF', EURNZD: 'EUR/NZD',
+  GBPAUD: 'GBP/AUD', GBPCAD: 'GBP/CAD', GBPCHF: 'GBP/CHF', GBPNZD: 'GBP/NZD',
+  NZDCHF: 'NZD/CHF', NZDCAD: 'NZD/CAD', CADCHF: 'CAD/CHF',
+};
 
 if (SUPABASE_URL.includes('YOUR_PROJECT_REF')) {
   document.getElementById('setup-note').style.display = 'block';
@@ -192,12 +209,16 @@ function renderLevels() {
     `;
     list.appendChild(div);
 
+    const t = typeClass(r.level_type);
+    const isSolid = t.includes('pivot') || t.includes('resist') || t.includes('support');
     priceLines.push(candleSeries.createPriceLine({
       price: Number(r.price),
-      color: typeClass(r.level_type).includes('resist') || typeClass(r.level_type).includes('high') ? '#d2574b'
-        : typeClass(r.level_type).includes('support') || typeClass(r.level_type).includes('low') ? '#3fa796' : '#d9a94e',
-      lineWidth: 1,
-      lineStyle: 2,
+      color: t.includes('resist') || t.includes('high') ? '#d2574b'
+        : t.includes('support') || t.includes('low') ? '#3fa796'
+        : t.includes('pivot') ? '#d9a94e'
+        : '#3fa796', // target / alt
+      lineWidth: 2,
+      lineStyle: isSolid ? LineStyle.Solid : LineStyle.Dotted,
       axisLabelVisible: true,
       title: r.label || r.level_type,
     }));
@@ -218,18 +239,36 @@ function renderHistory(rows) {
   `).join('');
 }
 
+function scaleToLevelsOnly(symbol) {
+  // No real candle source for this symbol (or no API key) — draw two invisible
+  // points spanning the level range so the price scale still lands in the right
+  // place and the price lines render legibly instead of on an empty/default axis.
+  const rows = levelsBySymbol[symbol] || [];
+  const prices = rows.map(r => Number(r.price)).filter(Number.isFinite);
+  if (prices.length === 0) { candleSeries.setData([]); return; }
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const pad = (max - min) * 0.15 || Math.abs(min) * 0.01 || 1;
+  const now = Math.floor(Date.now() / 1000);
+  const bar = (p) => ({ time: p.t, open: p.v, high: p.v, low: p.v, close: p.v });
+  candleSeries.setData([
+    bar({ t: now - 3600, v: min - pad }),
+    bar({ t: now, v: max + pad }),
+  ]);
+}
+
 async function loadCandles(symbol) {
-  if (!TWELVE_DATA_API_KEY) return; // skip — levels still show fine without price candles
+  const tdSymbol = TWELVE_DATA_SYMBOL_MAP[symbol];
+  if (!TWELVE_DATA_API_KEY || !tdSymbol) { scaleToLevelsOnly(symbol); return; }
   try {
-    const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1h&outputsize=200&apikey=${TWELVE_DATA_API_KEY}`);
+    const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSymbol)}&interval=1h&outputsize=200&apikey=${TWELVE_DATA_API_KEY}`);
     const data = await res.json();
-    if (!data.values) return;
+    if (!data.values) { scaleToLevelsOnly(symbol); return; }
     const candles = data.values.reverse().map(v => ({
       time: Math.floor(new Date(v.datetime).getTime() / 1000),
       open: Number(v.open), high: Number(v.high), low: Number(v.low), close: Number(v.close),
     }));
     candleSeries.setData(candles);
-  } catch (e) { console.error('Twelve Data fetch failed', e); }
+  } catch (e) { console.error('Twelve Data fetch failed', e); scaleToLevelsOnly(symbol); }
 }
 
 async function loadAll() {
