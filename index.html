@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Analyst View — Levels</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0b0d10;
+    --surface: #14171b;
+    --surface-2: #1b1f24;
+    --border: #262b31;
+    --text: #e7e4dc;
+    --muted: #8b9099;
+    --amber: #d9a94e;
+    --teal: #3fa796;
+    --coral: #d2574b;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Space Grotesk', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px; border-bottom:1px solid var(--border);
+    position:sticky; top:0; background:var(--bg); z-index:10;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand h1{ font-size:18px; font-weight:700; margin:0; letter-spacing:0.02em; }
+  .brand span{ color:var(--muted); font-size:12px; }
+  .sync{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+  .pulse{
+    width:8px; height:8px; border-radius:50%; background:var(--teal);
+    box-shadow:0 0 0 0 rgba(63,167,150,0.6);
+    animation:pulse 2s infinite;
+  }
+  @media (prefers-reduced-motion: reduce){ .pulse{ animation:none; } }
+  @keyframes pulse{
+    0%{ box-shadow:0 0 0 0 rgba(63,167,150,0.5); }
+    70%{ box-shadow:0 0 0 8px rgba(63,167,150,0); }
+    100%{ box-shadow:0 0 0 0 rgba(63,167,150,0); }
+  }
+  main{ padding:16px; max-width:1300px; margin:0 auto; }
+  .symbols{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .symbol-btn{
+    font-family:'JetBrains Mono', monospace; font-size:13px;
+    background:var(--surface); border:1px solid var(--border); color:var(--muted);
+    padding:7px 14px; border-radius:6px; cursor:pointer;
+  }
+  .symbol-btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .symbol-btn.active{ color:var(--amber); border-color:var(--amber); background:rgba(217,169,78,0.08); }
+  .layout{ display:grid; grid-template-columns:1fr 260px; gap:16px; }
+  @media (max-width: 780px){ .layout{ grid-template-columns:1fr; } }
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:14px;
+  }
+  .card h2{ font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:0 0 12px; font-weight:500; }
+  #chart{ width:100%; height:420px; }
+  .levels-list{ display:flex; flex-direction:column; gap:8px; max-height:420px; overflow-y:auto; }
+  .level-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 10px; border-radius:6px; background:var(--surface-2);
+    border-left:3px solid var(--muted);
+  }
+  .level-row.resistance, .level-row.pivot-high{ border-left-color:var(--coral); }
+  .level-row.support, .level-row.pivot-low{ border-left-color:var(--teal); }
+  .level-row.target, .level-row.bias, .level-row.alt{ border-left-color:var(--amber); }
+  .level-row .price{ font-family:'JetBrains Mono', monospace; font-size:14px; }
+  .level-row .meta{ font-size:11px; color:var(--muted); text-align:right; }
+  .level-row .type{ text-transform:uppercase; letter-spacing:0.04em; }
+  .history{ margin-top:16px; }
+  .overview{ margin-bottom:16px; overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; padding:6px 8px; border-bottom:1px solid var(--border); }
+  td{ padding:7px 8px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono', monospace; }
+  .empty{ color:var(--muted); font-size:13px; padding:24px; text-align:center; }
+  .setup-note{ font-size:12px; color:var(--muted); background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px; display:none; }
+  .bull{ color:var(--teal); font-weight:700; }
+  .bear{ color:var(--coral); font-weight:700; }
+  .export-note{ font-size:12px; color:var(--muted); margin:0 0 12px; line-height:1.5; }
+  #export-pine-btn{ border-color:var(--amber); color:var(--amber); }
+</style>
+</head>
+<body>
+
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">Analyst view levels dashboard: overview table, chart with current and historical levels, sidebar list, and history table</h2>
+
+<header>
+  <div class="brand">
+    <h1>Analyst View</h1>
+    <span>levels & alerts</span>
+  </div>
+  <div class="sync"><span class="pulse" aria-hidden="true"></span><span id="sync-label" class="mono">connecting…</span></div>
+</header>
+
+<main>
+  <div id="setup-note" class="setup-note">
+    Set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> (and optionally <code>TWELVE_DATA_API_KEY</code>) near the top of the script at the bottom of this file, then reload.
+  </div>
+
+  <div class="card overview">
+    <h2>Overview — all symbols</h2>
+    <table>
+      <thead><tr><th>Symbol</th><th>Bias</th><th>Price now</th><th>Pivot</th><th>TP1</th><th>TP2</th><th>Changed</th></tr></thead>
+      <tbody id="overview-body"><tr><td colspan="7" class="empty">Waiting for data…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card export-card">
+    <h2>Export to TradingView (Pine Script)</h2>
+    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine file from everything captured so far, in the same historical-replay format as your script. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
+    <button id="export-pine-btn" class="symbol-btn">Download .pine file</button>
+  </div>
+
+  <div class="symbols" id="symbol-tabs"></div>
+
+  <div class="layout">
+    <div class="card">
+      <h2>Chart</h2>
+      <div id="chart"></div>
+    </div>
+    <div class="card">
+      <h2>Current levels</h2>
+      <div class="levels-list" id="levels-list"><div class="empty">Waiting for data…</div></div>
+    </div>
+  </div>
+
+  <div class="card history">
+    <h2>History</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Symbol</th><th>Type</th><th>Price</th><th>Label</th></tr></thead>
+      <tbody id="history-body"><tr><td colspan="5" class="empty">Waiting for data…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createChart, ColorType, LineStyle } from 'https://esm.sh/lightweight-charts@4.1.3';
+
+// ---- fill these in ----
+const SUPABASE_URL = "https://mysnmwptbnzlkggwmmoe.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15c25td3B0Ym56bGtnZ3dtbW9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4NTE4NDIsImV4cCI6MjEwMzQyNzg0Mn0.HY1ymIQg-nTwUDrplcjllJJJU1tnrcady_DiXQd5ims";
+const TWELVE_DATA_API_KEY = "ab4b690529224b45bd267aac87c7287c";
+// ------------------------
+
+// Twelve Data covers forex + metals cleanly — real candles at the real price scale.
+// Indices/oil (US30, NAS100, DXY, USOIL) aren't available on the free tier as raw
+// index prices, and ETF proxies (DIA/QQQ/UUP/USO) trade at a totally different scale
+// than the index itself, so your level lines wouldn't line up — we skip candles for
+// those and just auto-scale the chart to the levels instead.
+const TWELVE_DATA_SYMBOL_MAP = {
+  XAUUSD: 'XAU/USD', XAGUSD: 'XAG/USD',
+  EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', USDCHF: 'USD/CHF',
+  AUDUSD: 'AUD/USD', NZDUSD: 'NZD/USD', USDCAD: 'USD/CAD',
+  EURGBP: 'EUR/GBP', EURJPY: 'EUR/JPY', GBPJPY: 'GBP/JPY',
+  AUDJPY: 'AUD/JPY', AUDCHF: 'AUD/CHF', CHFJPY: 'CHF/JPY',
+  NZDJPY: 'NZD/JPY', GBPCHF: 'GBP/CHF', CADJPY: 'CAD/JPY', AUDNZD: 'AUD/NZD',
+};
+
+if (SUPABASE_URL.includes('YOUR_PROJECT_REF')) {
+  document.getElementById('setup-note').style.display = 'block';
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const chartEl = document.getElementById('chart');
+const chart = createChart(chartEl, {
+  layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#8b9099', fontFamily: 'JetBrains Mono, monospace' },
+  grid: { vertLines: { color: '#1b1f24' }, horzLines: { color: '#1b1f24' } },
+  rightPriceScale: { borderColor: '#262b31' },
+  timeScale: { borderColor: '#262b31' },
+  autoSize: true,
+});
+const candleSeries = chart.addCandlestickSeries({
+  upColor: '#3fa796', downColor: '#d2574b', borderVisible: false,
+  wickUpColor: '#3fa796', wickDownColor: '#d2574b',
+});
+let priceLines = [];
+let historySeries = [];
+
+let activeSymbol = null;
+let symbols = [];
+let levelsBySymbol = {};   // latest value per (symbol, level_type, label) — "current" state
+let historyBySymbol = {};  // every row per symbol — used for the chart's historical segments
+
+function setSyncLabel(text) { document.getElementById('sync-label').textContent = text; }
+
+function typeClass(t) { return (t || '').toLowerCase().replace(/\s+/g, '-'); }
+
+// Distinguishes Target 1 vs Target 2, Resistance 1 vs 2, Alt 1 vs 2 (same level_type,
+// different label) — without this, the second overwrote the first and only one showed.
+function groupKeyFor(r) {
+  const t = typeClass(r.level_type);
+  if (t.includes('bias')) return r.symbol + ':bias';
+  return r.symbol + ':' + r.level_type + ':' + (r.label || '');
+}
+
+function colorFor(r) {
+  const t = typeClass(r.level_type);
+  if (t.includes('resist')) return '#d2574b';
+  if (t.includes('support')) return '#3fa796';
+  if (t.includes('pivot')) return '#d9a94e';
+  if (t.includes('bias')) return '#d9a94e';
+  return '#3fa796'; // target / alt
+}
+
+function isSolidType(t) { return t.includes('pivot') || t.includes('resist') || t.includes('support'); }
+
+// Short label for the CHART only — sidebar and history table keep the full text.
+function shortLabel(r) {
+  const t = typeClass(r.level_type);
+  if (t.includes('bias')) return (r.label || '').split(' — ')[0] || 'BIAS';
+  const num = (r.label || '').match(/(\d+)\s*$/)?.[1] || '';
+  if (t.includes('pivot')) return 'PIVOT';
+  if (t.includes('resist')) return 'R' + num;
+  if (t.includes('target')) return 'TP' + num;
+  if (t.includes('alt')) return 'ALT' + num;
+  return (r.level_type || '').toUpperCase();
+}
+
+function renderTabs() {
+  const wrap = document.getElementById('symbol-tabs');
+  wrap.innerHTML = '';
+  symbols.forEach(sym => {
+    const btn = document.createElement('button');
+    btn.className = 'symbol-btn' + (sym === activeSymbol ? ' active' : '');
+    btn.textContent = sym;
+    btn.onclick = () => { activeSymbol = sym; renderTabs(); renderLevels(); loadChart(sym); };
+    wrap.appendChild(btn);
+  });
+}
+
+function renderLevels() {
+  const list = document.getElementById('levels-list');
+  const rows = levelsBySymbol[activeSymbol] || [];
+  priceLines.forEach(pl => candleSeries.removePriceLine(pl));
+  priceLines = [];
+
+  if (rows.length === 0) { list.innerHTML = '<div class="empty">No levels yet</div>'; return; }
+
+  list.innerHTML = '';
+  rows.forEach(r => {
+    const div = document.createElement('div');
+    div.className = `level-row ${typeClass(r.level_type)}`;
+    div.innerHTML = `
+      <div>
+        <div class="price mono">${r.price}</div>
+        <div class="type">${r.level_type}</div>
+      </div>
+      <div class="meta">${r.label ? r.label + '<br>' : ''}${new Date(r.captured_at).toLocaleString()}</div>
+    `;
+    list.appendChild(div);
+
+    const t = typeClass(r.level_type);
+    priceLines.push(candleSeries.createPriceLine({
+      price: Number(r.price),
+      color: colorFor(r),
+      lineWidth: 2,
+      lineStyle: isSolidType(t) ? LineStyle.Solid : LineStyle.Dotted,
+      axisLabelVisible: true,
+      title: shortLabel(r), // abbreviated on the chart, per your request
+    }));
+  });
+}
+
+function renderHistory(rows) {
+  const body = document.getElementById('history-body');
+  if (!rows || rows.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty">No history yet</td></tr>'; return; }
+  body.innerHTML = rows.slice(0, 50).map(r => `
+    <tr>
+      <td>${new Date(r.captured_at).toLocaleString()}</td>
+      <td>${r.symbol}</td>
+      <td>${r.level_type}</td>
+      <td>${r.price}</td>
+      <td>${r.label || ''}</td>
+    </tr>
+  `).join('');
+}
+
+function renderOverview() {
+  const body = document.getElementById('overview-body');
+  if (symbols.length === 0) { body.innerHTML = '<tr><td colspan="7" class="empty">Waiting for data…</td></tr>'; return; }
+  body.innerHTML = symbols.map(sym => {
+    const rows = levelsBySymbol[sym] || [];
+    const find = (pred) => rows.find(pred);
+    const biasRow = find(r => typeClass(r.level_type).includes('bias'));
+    const pivotRow = find(r => typeClass(r.level_type).includes('pivot'));
+    const tp1Row = find(r => typeClass(r.level_type).includes('target') && /1\s*$/.test(r.label || ''));
+    const tp2Row = find(r => typeClass(r.level_type).includes('target') && /2\s*$/.test(r.label || ''));
+    const changedAt = rows.reduce((max, r) => { const d = new Date(r.captured_at); return d > max ? d : max; }, new Date(0));
+    const bias = biasRow ? (biasRow.label || '').split(' — ')[0] : '—';
+    const biasClass = /bull/i.test(bias) ? 'bull' : /bear/i.test(bias) ? 'bear' : '';
+    return `
+      <tr>
+        <td>${sym}</td>
+        <td class="${biasClass}">${bias}</td>
+        <td id="price-now-${sym}">—</td>
+        <td>${pivotRow ? pivotRow.price : '—'}</td>
+        <td>${tp1Row ? tp1Row.price : '—'}</td>
+        <td>${tp2Row ? tp2Row.price : '—'}</td>
+        <td>${changedAt.getTime() ? changedAt.toLocaleString() : '—'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function loadLivePrices() {
+  const tdSymbols = symbols.map(s => TWELVE_DATA_SYMBOL_MAP[s]).filter(Boolean);
+  if (!TWELVE_DATA_API_KEY || tdSymbols.length === 0) return;
+  try {
+    const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(tdSymbols.join(','))}&apikey=${TWELVE_DATA_API_KEY}`);
+    const data = await res.json();
+    symbols.forEach(sym => {
+      const td = TWELVE_DATA_SYMBOL_MAP[sym];
+      if (!td) return;
+      const entry = tdSymbols.length > 1 ? data[td] : data;
+      const price = entry && entry.price;
+      const cell = document.getElementById(`price-now-${sym}`);
+      if (cell && price) cell.textContent = Number(price).toLocaleString(undefined, { maximumFractionDigits: 6 });
+    });
+  } catch (e) { console.error('live price fetch failed', e); }
+}
+
+function scaleToLevelsOnly(symbol) {
+  // No real candle source for this symbol (or no API key) — draw two invisible
+  // points spanning the full level range and time range so the scale lands in the
+  // right place and both current + historical lines render legibly.
+  const rows = historyBySymbol[symbol] || [];
+  const prices = rows.map(r => Number(r.price)).filter(Number.isFinite);
+  if (prices.length === 0) { candleSeries.setData([]); return; }
+  const min = Math.min(...prices), max = Math.max(...prices);
+  const pad = (max - min) * 0.15 || Math.abs(min) * 0.01 || 1;
+  const times = rows.map(r => Math.floor(new Date(r.captured_at).getTime() / 1000));
+  const start = Math.min(...times);
+  const end = Math.floor(Date.now() / 1000);
+  const bar = (t, v) => ({ time: t, open: v, high: v, low: v, close: v });
+  candleSeries.setData([bar(start, min - pad), bar(Math.max(end, start + 1), max + pad)]);
+}
+
+async function loadCandles(symbol) {
+  const tdSymbol = TWELVE_DATA_SYMBOL_MAP[symbol];
+  if (!TWELVE_DATA_API_KEY || !tdSymbol) { scaleToLevelsOnly(symbol); return; }
+  try {
+    const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSymbol)}&interval=1h&outputsize=500&apikey=${TWELVE_DATA_API_KEY}`);
+    const data = await res.json();
+    if (!data.values) { scaleToLevelsOnly(symbol); return; }
+    const candles = data.values.reverse().map(v => ({
+      time: Math.floor(new Date(v.datetime).getTime() / 1000),
+      open: Number(v.open), high: Number(v.high), low: Number(v.low), close: Number(v.close),
+    }));
+    candleSeries.setData(candles);
+  } catch (e) { console.error('Twelve Data fetch failed', e); scaleToLevelsOnly(symbol); }
+}
+
+function drawHistorySegments(symbol) {
+  // Draws each level's past values as short horizontal segments, from when a value
+  // became active until it changed — same idea as your Pine Script backtest overlay.
+  historySeries.forEach(s => chart.removeSeries(s));
+  historySeries = [];
+
+  const rows = (historyBySymbol[symbol] || []).slice();
+  const groups = {};
+  rows.forEach(r => { (groups[groupKeyFor(r)] ||= []).push(r); });
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  Object.values(groups).forEach(list => {
+    list.sort((a, b) => new Date(a.captured_at) - new Date(b.captured_at));
+    const t = typeClass(list[0].level_type);
+    const color = colorFor(list[0]);
+    const style = isSolidType(t) ? LineStyle.Solid : LineStyle.Dotted;
+    for (let i = 0; i < list.length; i++) {
+      const start = Math.floor(new Date(list[i].captured_at).getTime() / 1000);
+      const end = i + 1 < list.length ? Math.floor(new Date(list[i + 1].captured_at).getTime() / 1000) : nowSec;
+      if (end <= start) continue;
+      const s = chart.addLineSeries({
+        color, lineWidth: 1, lineStyle: style,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      });
+      s.setData([{ time: start, value: Number(list[i].price) }, { time: end, value: Number(list[i].price) }]);
+      historySeries.push(s);
+    }
+  });
+}
+
+async function loadChart(symbol) {
+  await loadCandles(symbol);
+  drawHistorySegments(symbol);
+  chart.timeScale().fitContent();
+}
+
+async function loadAll() {
+  const { data, error } = await supabase
+    .from('analyst_levels')
+    .select('*')
+    .order('captured_at', { ascending: false })
+    .limit(1000);
+
+  if (error) { setSyncLabel('error — see console'); console.error(error); return; }
+
+  symbols = [...new Set(data.map(r => r.symbol))];
+  if (!activeSymbol || !symbols.includes(activeSymbol)) activeSymbol = symbols[0];
+
+  levelsBySymbol = {};
+  historyBySymbol = {};
+  const seen = new Set();
+  data.forEach(r => {
+    (historyBySymbol[r.symbol] ||= []).push(r);
+    const gk = groupKeyFor(r);
+    if (seen.has(gk)) return; // keep only the latest per (symbol, level_type, label)
+    seen.add(gk);
+    (levelsBySymbol[r.symbol] ||= []).push(r);
+  });
+
+  renderTabs();
+  renderLevels();
+  renderHistory(data);
+  renderOverview();
+  loadChart(activeSymbol);
+  loadLivePrices();
+  setSyncLabel('synced ' + new Date().toLocaleTimeString());
+}
+
+loadAll();
+
+// Live updates — no polling needed, Supabase pushes new rows over a websocket.
+supabase
+  .channel('analyst_levels_changes')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'analyst_levels' }, () => {
+    loadAll();
+  })
+  .subscribe();
+
+// ============================================================================
+// EXPORT TO PINE SCRIPT
+// Rebuilds your "Analyst View Historical Replay" indicator with fresh data
+// pulled from Supabase. We use the 'pivot' rows as the one-row-per-capture
+// anchor (raw_data on each row holds the full original analyst-view item —
+// id, date, direction, pivot, target1, target2 — exactly what f_add() needs).
+// ============================================================================
+
+const PINE_TEMPLATE = `//@version=6
+indicator("Fusion Markets / Trading Central — Analyst View Historical Replay", overlay=true, max_lines_count=500, max_labels_count=500, max_bars_back=5000)
+
+// ============================================================================
+// PURPOSE
+// Historical replay of the Fusion Markets / Trading Central Intraday Analyst
+// Views captured in the supplied data.
+//
+// Every Analyst View is kept as a separate record.
+// The Pivot/Support/Resistance level is drawn from the issue time until the
+// next Analyst View for the SAME symbol.
+// Times are stored in UTC and displayed in Romania time (UTC+3).
+//
+// Generated automatically from the Supabase pipeline — re-export any time
+// for a fresh snapshot; Pine Script cannot pull live data on its own.
+// ============================================================================
+
+string TZ = "GMT+3"
+
+showPivot   = input.bool(true, "Show Pivot / Key Level", group="Chart")
+showTargets = input.bool(true, "Show T1 / T2", group="Chart")
+showLabels  = input.bool(false, "Show update labels", group="Chart")
+
+showDash    = input.bool(true, "Show dashboard", group="Dashboard")
+showHistory = input.bool(true, "Show history table", group="Dashboard")
+historyRows = input.int(15, "History rows", minval=5, maxval=15, group="Dashboard")
+
+autoSymbol = input.bool(true, "Auto-detect chart symbol", group="Symbol")
+manualSymbol = input.string(
+     "XAUUSD",
+     "Manual symbol",
+     options=[__OPTIONS_LIST__],
+     group="Symbol")
+
+color BG = color.rgb(15, 15, 20)
+color HDR = color.rgb(5, 5, 9)
+color TXT = color.white
+color BORDER = color.rgb(65, 65, 75)
+color BUY = color.lime
+color SELL = color.red
+
+// ============================================================================
+// DATA
+// ============================================================================
+
+var string[] S = array.new_string()
+var int[]    T = array.new_int()
+var int[]    O = array.new_int()
+var float[]  P = array.new_float()
+var float[]  A = array.new_float()
+var float[]  B = array.new_float()
+var string[] ID = array.new_string()
+
+f_add(string s, int t, int o, float p, float a, float b, string id) =>
+    array.push(S, s)
+    array.push(T, t)
+    array.push(O, o)
+    array.push(P, p)
+    array.push(A, a)
+    array.push(B, b)
+    array.push(ID, id)
+
+if barstate.isfirst
+__DATA_LINES__
+
+// ============================================================================
+// SYMBOL DETECTION
+// ============================================================================
+
+string tv = str.upper(syminfo.ticker)
+
+string detected =
+     str.contains(tv, "XAU") or str.contains(tv, "GOLD") ? "XAUUSD" :
+     str.contains(tv, "XAG") or str.contains(tv, "SILVER") ? "XAGUSD" :
+__DETECT_CHAIN__
+     na
+
+string active = autoSymbol and not na(detected) ? detected : manualSymbol
+
+f_bias(int d) =>
+    d == 1 ? "BUY" : "SELL"
+
+f_dt(int ts) =>
+    str.format_time(ts, "dd.MM.yyyy HH:mm", TZ)
+
+f_price(float x) =>
+    na(x) ? "-" : str.tostring(x, format.mintick)
+
+// ============================================================================
+// HISTORICAL LINES
+// ============================================================================
+
+var line[] histLines = array.new_line()
+var label[] histLabels = array.new_label()
+
+if barstate.islast
+    if array.size(histLines) > 0
+        for q = 0 to array.size(histLines) - 1
+            line.delete(array.get(histLines, q))
+    array.clear(histLines)
+
+    if array.size(histLabels) > 0
+        for q = 0 to array.size(histLabels) - 1
+            label.delete(array.get(histLabels, q))
+    array.clear(histLabels)
+
+    int n = array.size(S)
+
+    if n > 0
+        for i = 0 to n - 1
+            if array.get(S, i) == active
+                int startT = array.get(T, i)
+
+                if startT <= time
+                    int nextT = na
+
+                    for j = 0 to n - 1
+                        if array.get(S, j) == active
+                            int candidate = array.get(T, j)
+                            if candidate > startT
+                                if na(nextT) or candidate < nextT
+                                    nextT := candidate
+
+                    int endT = na(nextT) ? time : math.min(nextT, time)
+
+                    if endT > startT
+                        int dir = array.get(O, i)
+                        float pivot = array.get(P, i)
+                        float t1 = array.get(A, i)
+                        float t2 = array.get(B, i)
+                        color c = dir == 1 ? BUY : SELL
+
+                        if showPivot and not na(pivot)
+                            array.push(histLines, line.new(
+                                 startT, pivot, endT, pivot,
+                                 xloc=xloc.bar_time,
+                                 color=c,
+                                 width=3))
+
+                        if showTargets and not na(t1)
+                            array.push(histLines, line.new(
+                                 startT, t1, endT, t1,
+                                 xloc=xloc.bar_time,
+                                 color=c,
+                                 style=line.style_dashed,
+                                 width=2))
+
+                        if showTargets and not na(t2)
+                            array.push(histLines, line.new(
+                                 startT, t2, endT, t2,
+                                 xloc=xloc.bar_time,
+                                 color=c,
+                                 style=line.style_dotted,
+                                 width=2))
+
+                        if showLabels and not na(pivot)
+                            array.push(histLabels, label.new(
+                                 startT, pivot,
+                                 f_dt(startT) + "  " + f_bias(dir),
+                                 xloc=xloc.bar_time,
+                                 style=label.style_label_left,
+                                 textcolor=color.white,
+                                 color=c))
+
+// ============================================================================
+// CURRENT VIEW + STATISTICS
+// ============================================================================
+
+int n2 = array.size(S)
+
+int current = na
+int currentTime = na
+int total = 0
+int buys = 0
+int sells = 0
+int changes = 0
+int previousDir = 0
+int firstTime = na
+int lastUpdate = na
+
+if n2 > 0
+    for i = 0 to n2 - 1
+        if array.get(S, i) == active
+            int tt = array.get(T, i)
+            int dd = array.get(O, i)
+
+            total += 1
+
+            if dd == 1
+                buys += 1
+            else
+                sells += 1
+
+            if previousDir != 0 and dd != previousDir
+                changes += 1
+
+            previousDir := dd
+
+            if na(firstTime) or tt < firstTime
+                firstTime := tt
+
+            if na(lastUpdate) or tt > lastUpdate
+                lastUpdate := tt
+
+            if tt <= time
+                if na(currentTime) or tt > currentTime
+                    current = i
+                    currentTime := tt
+
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+
+var table dash = table.new(
+     position.top_right,
+     2,
+     12,
+     border_width=1,
+     border_color=BORDER,
+     frame_color=BORDER,
+     frame_width=1)
+
+if barstate.islast and showDash
+    table.clear(dash, 0, 0, 1, 11)
+
+    string currentBias = na(current) ? "NO DATA" : f_bias(array.get(O, current))
+    string updateTime = na(current) ? "-" : f_dt(array.get(T, current))
+
+    table.cell(dash, 0, 0, "FUSION / TRADING CENTRAL", text_color=TXT, bgcolor=HDR)
+    table.cell(dash, 1, 0, active, text_color=TXT, bgcolor=HDR)
+
+    table.cell(dash, 0, 1, "Current View", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 1, currentBias,
+         text_color=na(current) ? color.orange : array.get(O, current) == 1 ? BUY : SELL,
+         bgcolor=BG)
+
+    table.cell(dash, 0, 2, "Current Update", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 2, updateTime, text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 3, "Total Updates", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 3, str.tostring(total), text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 4, "BUY", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 4, str.tostring(buys), text_color=BUY, bgcolor=BG)
+
+    table.cell(dash, 0, 5, "SELL", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 5, str.tostring(sells), text_color=SELL, bgcolor=BG)
+
+    table.cell(dash, 0, 6, "Bias Changes", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 6, str.tostring(changes), text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 7, "First Update", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 7, na(firstTime) ? "-" : f_dt(firstTime), text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 8, "Last Update", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 8, na(lastUpdate) ? "-" : f_dt(lastUpdate), text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 9, "Timezone", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 9, "Romania UTC+3", text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 10, "Data Records", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 10, str.tostring(total), text_color=TXT, bgcolor=BG)
+
+    table.cell(dash, 0, 11, "Mode", text_color=TXT, bgcolor=BG)
+    table.cell(dash, 1, 11, "Historical Replay", text_color=TXT, bgcolor=BG)
+
+// ============================================================================
+// HISTORY TABLE
+// ============================================================================
+
+var table hist = table.new(
+     position.bottom_right,
+     5,
+     17,
+     border_width=1,
+     border_color=BORDER,
+     frame_color=BORDER,
+     frame_width=1)
+
+if barstate.islast and showHistory
+    table.clear(hist, 0, 0, 4, 16)
+
+    table.cell(hist, 0, 0, "DATE / TIME", text_color=TXT, bgcolor=HDR)
+    table.cell(hist, 1, 0, "BIAS", text_color=TXT, bgcolor=HDR)
+    table.cell(hist, 2, 0, "PIVOT", text_color=TXT, bgcolor=HDR)
+    table.cell(hist, 3, 0, "T1", text_color=TXT, bgcolor=HDR)
+    table.cell(hist, 4, 0, "T2", text_color=TXT, bgcolor=HDR)
+
+    int row = 1
+    int shown = 0
+
+    if n2 > 0
+        for k = 0 to n2 - 1
+            int z = n2 - 1 - k
+
+            if shown < historyRows and array.get(S, z) == active
+                int dd = array.get(O, z)
+
+                table.cell(hist, 0, row, f_dt(array.get(T, z)),
+                     text_color=TXT, bgcolor=BG)
+
+                table.cell(hist, 1, row, f_bias(dd),
+                     text_color=dd == 1 ? BUY : SELL, bgcolor=BG)
+
+                table.cell(hist, 2, row, f_price(array.get(P, z)),
+                     text_color=TXT, bgcolor=BG)
+
+                table.cell(hist, 3, row, f_price(array.get(A, z)),
+                     text_color=TXT, bgcolor=BG)
+
+                table.cell(hist, 4, row, f_price(array.get(B, z)),
+                     text_color=TXT, bgcolor=BG)
+
+                row += 1
+                shown += 1
+
+// ============================================================================
+// END
+// ============================================================================
+`;
+
+async function exportPineScript() {
+  const btn = document.getElementById('export-pine-btn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+  try {
+    const { data, error } = await supabase
+      .from('analyst_levels')
+      .select('symbol, raw_data, captured_at')
+      .eq('level_type', 'pivot')
+      .order('captured_at', { ascending: true });
+
+    if (error) throw error;
+    if (!data || data.length === 0) { alert('No data captured yet.'); return; }
+
+    const uniqueSymbols = [...new Set(data.map(r => r.symbol))];
+
+    const dataLines = data.map(r => {
+      const raw = r.raw_data || {};
+      const ts = raw.date ? new Date(raw.date).getTime() : new Date(r.captured_at).getTime();
+      const dirNum = Number(raw.opinionIntraday);
+      const dir = dirNum > 0 ? 1 : dirNum < 0 ? -1 : 0;
+      const pivot = Number(raw.pivot);
+      const t1 = raw.target1 != null ? Number(raw.target1) : NaN;
+      const t2 = raw.target2 != null ? Number(raw.target2) : NaN;
+      const id = String(raw.id || '');
+      const p = Number.isFinite(pivot) ? pivot : 'na';
+      const a = Number.isFinite(t1) ? t1 : 'na';
+      const b = Number.isFinite(t2) ? t2 : 'na';
+      return `    f_add("${r.symbol}", ${ts}, ${dir}, ${p}, ${a}, ${b}, "${id}")`;
+    }).join('\n');
+
+    const optionsList = uniqueSymbols.map(s => `"${s}"`).join(',');
+
+    const detectChain = uniqueSymbols
+      .filter(s => s !== 'XAUUSD' && s !== 'XAGUSD')
+      .map(s => `     str.contains(tv, "${s}") ? "${s}" :`)
+      .join('\n');
+
+    const script = PINE_TEMPLATE
+      .replace('__DATA_LINES__', dataLines)
+      .replace('__OPTIONS_LIST__', optionsList)
+      .replace('__DETECT_CHAIN__', detectChain ? detectChain + '\n' : '');
+
+    const blob = new Blob([script], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fusion_analyst_view_export.pine';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('Pine export failed', e);
+    alert('Export failed — see console for details.');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('export-pine-btn').addEventListener('click', exportPineScript);
+</script>
+</body>
+</html>
