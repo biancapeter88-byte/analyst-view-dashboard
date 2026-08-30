@@ -164,6 +164,14 @@ const TWELVE_DATA_SYMBOL_MAP = {
   NZDJPY: 'NZD/JPY', GBPCHF: 'GBP/CHF', CADJPY: 'CAD/JPY', AUDNZD: 'AUD/NZD',
 };
 
+// Only these symbols show up anywhere on the dashboard (tabs, overview, history,
+// export) — everything else your extension captures (e.g. CL1, HG1) is ignored here.
+const ALLOWED_SYMBOLS = [
+  'XAUUSD', 'XAGUSD',
+  'EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDJPY', 'USDCHF',
+  'EURGBP', 'AUDJPY', 'EURJPY', 'CHFJPY', 'NZDJPY', 'GBPCHF', 'CADJPY', 'AUDNZD', 'AUDCHF',
+];
+
 if (SUPABASE_URL.includes('YOUR_PROJECT_REF')) {
   document.getElementById('setup-note').style.display = 'block';
 }
@@ -404,13 +412,15 @@ async function loadAll() {
 
   if (error) { setSyncLabel('error — see console'); console.error(error); return; }
 
-  symbols = [...new Set(data.map(r => r.symbol))];
+  const filtered = data.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
+
+  symbols = ALLOWED_SYMBOLS.filter(s => filtered.some(r => r.symbol === s));
   if (!activeSymbol || !symbols.includes(activeSymbol)) activeSymbol = symbols[0];
 
   levelsBySymbol = {};
   historyBySymbol = {};
   const seen = new Set();
-  data.forEach(r => {
+  filtered.forEach(r => {
     (historyBySymbol[r.symbol] ||= []).push(r);
     const gk = groupKeyFor(r);
     if (seen.has(gk)) return; // keep only the latest per (symbol, level_type, label)
@@ -420,7 +430,7 @@ async function loadAll() {
 
   renderTabs();
   renderLevels();
-  renderHistory(data);
+  renderHistory(filtered);
   renderOverview();
   loadChart(activeSymbol);
   loadLivePrices();
@@ -781,9 +791,12 @@ async function exportPineScript() {
     if (error) throw error;
     if (!data || data.length === 0) { alert('No data captured yet.'); return; }
 
-    const uniqueSymbols = [...new Set(data.map(r => r.symbol))];
+    const filtered = data.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
+    if (filtered.length === 0) { alert('No data captured yet for your watchlist symbols.'); return; }
 
-    const dataLines = data.map(r => {
+    const uniqueSymbols = ALLOWED_SYMBOLS.filter(s => filtered.some(r => r.symbol === s));
+
+    const dataLines = filtered.map(r => {
       const raw = r.raw_data || {};
       const ts = raw.date ? new Date(raw.date).getTime() : new Date(r.captured_at).getTime();
       const dirNum = Number(raw.opinionIntraday);
