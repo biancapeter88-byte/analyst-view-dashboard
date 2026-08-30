@@ -85,6 +85,8 @@
   .bear{ color:var(--coral); font-weight:700; }
   .export-note{ font-size:12px; color:var(--muted); margin:0 0 12px; line-height:1.5; }
   #export-pine-btn{ border-color:var(--amber); color:var(--amber); }
+  .chart-card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .chart-card-head h2{ margin:0; }
 </style>
 </head>
 <body>
@@ -122,7 +124,10 @@
 
   <div class="layout">
     <div class="card">
-      <h2>Chart</h2>
+      <div class="chart-card-head">
+        <h2>Chart</h2>
+        <a id="open-tv-link" class="symbol-btn" href="https://www.tradingview.com/chart/" target="_blank" rel="noopener">Open in TradingView ↗</a>
+      </div>
       <div id="chart"></div>
     </div>
     <div class="card">
@@ -192,6 +197,8 @@ const candleSeries = chart.addCandlestickSeries({
 });
 let priceLines = [];
 let historySeries = [];
+let scaleHelperSeries = null;
+let pinnedToScale = true;
 
 let activeSymbol = null;
 let symbols = [];
@@ -398,6 +405,8 @@ function drawHistorySegments(symbol) {
 }
 
 async function loadChart(symbol) {
+  const link = document.getElementById('open-tv-link');
+  if (link) link.href = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`;
   await loadCandles(symbol);
   drawHistorySegments(symbol);
   chart.timeScale().fitContent();
