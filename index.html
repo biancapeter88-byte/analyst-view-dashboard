@@ -33,7 +33,8 @@
   .brand{ display:flex; align-items:baseline; gap:10px; }
   .brand h1{ font-size:18px; font-weight:700; margin:0; letter-spacing:0.02em; }
   .brand span{ color:var(--muted); font-size:12px; }
-  .sync{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+  .sync{ display:flex; align-items:center; gap:12px; font-size:12px; color:var(--muted); }
+  .sync-dot{ display:flex; align-items:center; gap:8px; }
   .pulse{
     width:8px; height:8px; border-radius:50%; background:var(--teal);
     box-shadow:0 0 0 0 rgba(63,167,150,0.6);
@@ -54,7 +55,7 @@
   }
   .symbol-btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
   .symbol-btn.active{ color:var(--amber); border-color:var(--amber); background:rgba(217,169,78,0.08); }
-  .layout{ display:grid; grid-template-columns:1fr 260px; gap:16px; }
+  .layout{ display:grid; grid-template-columns:1fr 300px; gap:16px; }
   @media (max-width: 780px){ .layout{ grid-template-columns:1fr; } }
   .card{
     background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -62,23 +63,12 @@
   }
   .card h2{ font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:0 0 12px; font-weight:500; }
   #chart{ width:100%; height:420px; }
-  .levels-list{ display:flex; flex-direction:column; gap:8px; max-height:420px; overflow-y:auto; }
-  .level-row{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:8px 10px; border-radius:6px; background:var(--surface-2);
-    border-left:3px solid var(--muted);
-  }
-  .level-row.resistance, .level-row.pivot-high{ border-left-color:var(--coral); }
-  .level-row.support, .level-row.pivot-low{ border-left-color:var(--teal); }
-  .level-row.target, .level-row.bias, .level-row.alt{ border-left-color:var(--amber); }
-  .level-row .price{ font-family:'JetBrains Mono', monospace; font-size:14px; }
-  .level-row .meta{ font-size:11px; color:var(--muted); text-align:right; }
-  .level-row .type{ text-transform:uppercase; letter-spacing:0.04em; }
   .history{ margin-top:16px; }
   .overview{ margin-bottom:16px; overflow-x:auto; }
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th{ text-align:left; color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; padding:6px 8px; border-bottom:1px solid var(--border); }
   td{ padding:7px 8px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono', monospace; }
+  .comment-cell{ max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Space Grotesk', sans-serif; font-size:12px; color:var(--muted); }
   .empty{ color:var(--muted); font-size:13px; padding:24px; text-align:center; }
   .setup-note{ font-size:12px; color:var(--muted); background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px; display:none; }
   .bull{ color:var(--teal); font-weight:700; }
@@ -87,18 +77,43 @@
   #export-pine-btn{ border-color:var(--amber); color:var(--amber); }
   .chart-card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
   .chart-card-head h2{ margin:0; }
+
+  /* ---- Trading Central-style panel (matches the TradingView overlay panel look) ---- */
+  .tc-panel{ background:#131c2e; border:1px solid #2a3550; border-radius:10px; padding:14px; font-family:'JetBrains Mono', monospace; }
+  .tc-panel .tc-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:11px; color:var(--muted); letter-spacing:0.04em; }
+  .tc-panel .tc-bias{ font-size:19px; font-weight:700; margin-bottom:12px; letter-spacing:0.02em; }
+  .tc-panel .tc-bias.bull{ color:#3fa796; }
+  .tc-panel .tc-bias.bear{ color:#d2574b; }
+  .tc-panel .tc-bias.neutral{ color:var(--muted); }
+  .tc-panel .tc-grid{ display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:13px; margin-bottom:12px; }
+  .tc-panel .tc-grid .lbl{ color:var(--muted); }
+  .tc-panel .tc-grid .val{ font-weight:700; text-align:right; color:var(--text); }
+  .tc-panel .tc-text{ font-size:12px; color:#c7cbd4; margin-bottom:8px; line-height:1.5; font-family:'Space Grotesk', sans-serif; }
+  .tc-panel .tc-text b{ color:var(--text); }
+  .tc-panel .tc-controls{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-top:8px; border-top:1px solid #2a3550; padding-top:10px; font-family:'Space Grotesk', sans-serif; }
+  .tc-panel .tc-controls label{ display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .tc-panel .tc-controls button{ font-family:'JetBrains Mono', monospace; font-size:11px; background:transparent; border:1px solid var(--border); color:var(--muted); padding:4px 10px; border-radius:5px; cursor:pointer; }
+  .tc-panel .tc-time{ font-size:10px; color:var(--muted); margin-top:8px; }
+  .tc-history-mini .row{ display:flex; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:1px solid #1e2740; color:var(--muted); font-size:11px; }
+  .tc-history-mini{ margin-top:8px; max-height:200px; overflow-y:auto; }
+
+  .alert-toast{ position:fixed; bottom:16px; right:16px; background:#1b1f24; border:1px solid var(--amber); color:var(--text); padding:10px 14px; border-radius:8px; font-size:12px; max-width:320px; opacity:0; transform:translateY(8px); transition:all .2s; pointer-events:none; z-index:50; font-family:'JetBrains Mono', monospace; }
+  .alert-toast.show{ opacity:1; transform:translateY(0); }
 </style>
 </head>
 <body>
 
-<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">Analyst view levels dashboard: overview table, chart with current and historical levels, sidebar list, and history table</h2>
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;">Analyst view levels dashboard: overview table, chart with current and historical levels, Trading Central panel, and history table</h2>
 
 <header>
   <div class="brand">
     <h1>Analyst View</h1>
     <span>levels & alerts</span>
   </div>
-  <div class="sync"><span class="pulse" aria-hidden="true"></span><span id="sync-label" class="mono">connecting…</span></div>
+  <div class="sync">
+    <button id="enable-alerts-btn" class="symbol-btn">🔔 Enable alerts</button>
+    <div class="sync-dot"><span class="pulse" aria-hidden="true"></span><span id="sync-label" class="mono">connecting…</span></div>
+  </div>
 </header>
 
 <main>
@@ -109,14 +124,14 @@
   <div class="card overview">
     <h2>Overview — all symbols</h2>
     <table>
-      <thead><tr><th>Symbol</th><th>Bias</th><th>Price now</th><th>Pivot</th><th>TP1</th><th>TP2</th><th>Changed</th></tr></thead>
-      <tbody id="overview-body"><tr><td colspan="7" class="empty">Waiting for data…</td></tr></tbody>
+      <thead><tr><th>Symbol</th><th>Bias</th><th>Price now</th><th>Pivot</th><th>TP1</th><th>TP2</th><th>Comment</th><th>Changed</th></tr></thead>
+      <tbody id="overview-body"><tr><td colspan="8" class="empty">Waiting for data…</td></tr></tbody>
     </table>
   </div>
 
   <div class="card export-card">
     <h2>Export to TradingView (Pine Script)</h2>
-    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine file from everything captured so far, in the same historical-replay format as your script. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
+    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine file from everything captured so far, in the same historical-replay format as your script, now including alternative levels and the Preferred / Alternative / Comment text. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
     <button id="export-pine-btn" class="symbol-btn">Download .pine file</button>
   </div>
 
@@ -131,8 +146,8 @@
       <div id="chart"></div>
     </div>
     <div class="card">
-      <h2>Current levels</h2>
-      <div class="levels-list" id="levels-list"><div class="empty">Waiting for data…</div></div>
+      <h2>Trading Central</h2>
+      <div id="tc-panel"><div class="empty">Waiting for data…</div></div>
     </div>
   </div>
 
@@ -197,17 +212,29 @@ const candleSeries = chart.addCandlestickSeries({
 });
 let priceLines = [];
 let historySeries = [];
-let scaleHelperSeries = null;
-let pinnedToScale = true;
 
 let activeSymbol = null;
 let symbols = [];
 let levelsBySymbol = {};   // latest value per (symbol, level_type, label) — "current" state
 let historyBySymbol = {};  // every row per symbol — used for the chart's historical segments
 
+// Trading Central panel state (mirrors the browser overlay panel's toggles).
+let showChartLevels = true;
+let showCommentGlobal = true;
+let alertsEnabled = true;
+let historyPanelOpen = false;
+
+// Unified level-touch alert state — one alert per symbol per distinct set of
+// touched levels, not one per level, and re-armed whenever a new Analyst View
+// capture replaces the old one for that symbol.
+let lastAlertSig = {};
+let lastBiasCapturedAt = {};
+
 function setSyncLabel(text) { document.getElementById('sync-label').textContent = text; }
 
 function typeClass(t) { return (t || '').toLowerCase().replace(/\s+/g, '-'); }
+
+function escHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // Distinguishes Target 1 vs Target 2, Resistance 1 vs 2, Alt 1 vs 2 (same level_type,
 // different label) — without this, the second overwrote the first and only one showed.
@@ -228,7 +255,7 @@ function colorFor(r) {
 
 function isSolidType(t) { return t.includes('pivot') || t.includes('resist') || t.includes('support'); }
 
-// Short label for the CHART only — sidebar and history table keep the full text.
+// Short label for the CHART only — history table keeps the full text.
 function shortLabel(r) {
   const t = typeClass(r.level_type);
   if (t.includes('bias')) return (r.label || '').split(' — ')[0] || 'BIAS';
@@ -247,42 +274,93 @@ function renderTabs() {
     const btn = document.createElement('button');
     btn.className = 'symbol-btn' + (sym === activeSymbol ? ' active' : '');
     btn.textContent = sym;
-    btn.onclick = () => { activeSymbol = sym; renderTabs(); renderLevels(); loadChart(sym); };
+    btn.onclick = () => { activeSymbol = sym; historyPanelOpen = false; renderTabs(); renderPanel(); loadChart(sym); };
     wrap.appendChild(btn);
   });
 }
 
-function renderLevels() {
-  const list = document.getElementById('levels-list');
+// ---- Trading Central-style panel for the active symbol ----
+function renderPanel() {
+  const panelEl = document.getElementById('tc-panel');
   const rows = levelsBySymbol[activeSymbol] || [];
+  const biasRow = rows.find(r => typeClass(r.level_type).includes('bias'));
+
+  // Chart price lines — skip the synthetic 'bias' row (its price is just the pivot
+  // repeated, drawing it would duplicate the pivot line).
   priceLines.forEach(pl => candleSeries.removePriceLine(pl));
   priceLines = [];
+  if (showChartLevels) {
+    rows.filter(r => !typeClass(r.level_type).includes('bias')).forEach(r => {
+      priceLines.push(candleSeries.createPriceLine({
+        price: Number(r.price),
+        color: colorFor(r),
+        lineWidth: 2,
+        lineStyle: isSolidType(typeClass(r.level_type)) ? LineStyle.Solid : LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: shortLabel(r),
+      }));
+    });
+  }
 
-  if (rows.length === 0) { list.innerHTML = '<div class="empty">No levels yet</div>'; return; }
+  if (!panelEl) return;
+  if (!biasRow) { panelEl.innerHTML = `<div class="empty">No Analyst View captured for ${escHtml(activeSymbol || '')} yet.</div>`; return; }
 
-  list.innerHTML = '';
-  rows.forEach(r => {
-    const div = document.createElement('div');
-    div.className = `level-row ${typeClass(r.level_type)}`;
-    div.innerHTML = `
-      <div>
-        <div class="price mono">${r.price}</div>
-        <div class="type">${r.level_type}</div>
+  const raw = biasRow.raw_data || {};
+  const dir = Number(raw.opinionIntraday);
+  const biasClass = dir > 0 ? 'bull' : dir < 0 ? 'bear' : 'neutral';
+  const biasLabel = dir > 0 ? 'BULLISH' : dir < 0 ? 'BEARISH' : 'NEUTRAL';
+  const alts = Array.isArray(raw.alternativeNumbers) ? raw.alternativeNumbers : [];
+  const fmt = v => (v == null || v === '' || Number.isNaN(Number(v))) ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 6 });
+  const updated = raw.date ? new Date(raw.date) : new Date(biasRow.captured_at);
+
+  panelEl.innerHTML = `
+    <div class="tc-panel">
+      <div class="tc-head"><span>${escHtml(activeSymbol)}</span><span>TRADING CENTRAL</span></div>
+      <div class="tc-bias ${biasClass}">${biasLabel}</div>
+      <div class="tc-grid">
+        <div class="lbl">Pivot / invalidation</div><div class="val">${fmt(raw.pivot)}</div>
+        <div class="lbl">Target 1</div><div class="val">${fmt(raw.target1)}</div>
+        <div class="lbl">Target 2</div><div class="val">${fmt(raw.target2)}</div>
+        ${alts.slice(0, 2).map((v, i) => `<div class="lbl">Alternative ${i + 1}</div><div class="val">${fmt(v)}</div>`).join('')}
       </div>
-      <div class="meta">${r.label ? r.label + '<br>' : ''}${new Date(r.captured_at).toLocaleString()}</div>
-    `;
-    list.appendChild(div);
+      ${raw.preference ? `<div class="tc-text"><b>Preferred:</b> ${escHtml(raw.preference)}</div>` : ''}
+      ${raw.alternative ? `<div class="tc-text"><b>Alternative:</b> ${escHtml(raw.alternative)}</div>` : ''}
+      ${(showCommentGlobal && raw.comment) ? `<div class="tc-text"><b>Comment:</b> ${escHtml(raw.comment)}</div>` : ''}
+      <div class="tc-controls">
+        <label><input type="checkbox" id="tc-chart-toggle" ${showChartLevels ? 'checked' : ''}> Chart levels</label>
+        <label><input type="checkbox" id="tc-comment-toggle" ${showCommentGlobal ? 'checked' : ''}> Comment</label>
+        <label><input type="checkbox" id="tc-alerts-toggle" ${alertsEnabled ? 'checked' : ''}> Alerts</label>
+        <button id="tc-history-toggle">${historyPanelOpen ? 'Hide history' : 'History'}</button>
+      </div>
+      <div id="tc-history-mini"></div>
+      <div class="tc-time">Updated: ${updated.toLocaleString()} · ${escHtml(raw.term || 'INTRADAY')}</div>
+    </div>
+  `;
 
-    const t = typeClass(r.level_type);
-    priceLines.push(candleSeries.createPriceLine({
-      price: Number(r.price),
-      color: colorFor(r),
-      lineWidth: 2,
-      lineStyle: isSolidType(t) ? LineStyle.Solid : LineStyle.Dotted,
-      axisLabelVisible: true,
-      title: shortLabel(r), // abbreviated on the chart, per your request
-    }));
-  });
+  document.getElementById('tc-chart-toggle').onchange = e => { showChartLevels = e.target.checked; renderPanel(); };
+  document.getElementById('tc-comment-toggle').onchange = e => { showCommentGlobal = e.target.checked; renderPanel(); };
+  document.getElementById('tc-alerts-toggle').onchange = e => { alertsEnabled = e.target.checked; };
+  document.getElementById('tc-history-toggle').onclick = () => { historyPanelOpen = !historyPanelOpen; renderPanel(); };
+  renderHistoryMini();
+}
+
+function renderHistoryMini() {
+  const el = document.getElementById('tc-history-mini');
+  if (!el) return;
+  if (!historyPanelOpen) { el.innerHTML = ''; return; }
+  const rows = (historyBySymbol[activeSymbol] || [])
+    .filter(r => typeClass(r.level_type).includes('bias'))
+    .slice()
+    .sort((a, b) => new Date(b.captured_at) - new Date(a.captured_at))
+    .slice(0, 15);
+  if (rows.length === 0) { el.innerHTML = '<div class="empty">No history yet.</div>'; return; }
+  el.innerHTML = '<div class="tc-history-mini">' + rows.map(r => {
+    const raw = r.raw_data || {};
+    const dir = Number(raw.opinionIntraday);
+    const label = dir > 0 ? 'BULLISH' : dir < 0 ? 'BEARISH' : 'NEUTRAL';
+    const pivot = raw.pivot != null ? raw.pivot : '—';
+    return `<div class="row"><span>${new Date(r.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><span>${label}</span><span>P ${pivot}</span></div>`;
+  }).join('') + '</div>';
 }
 
 function renderHistory(rows) {
@@ -301,7 +379,7 @@ function renderHistory(rows) {
 
 function renderOverview() {
   const body = document.getElementById('overview-body');
-  if (symbols.length === 0) { body.innerHTML = '<tr><td colspan="7" class="empty">Waiting for data…</td></tr>'; return; }
+  if (symbols.length === 0) { body.innerHTML = '<tr><td colspan="8" class="empty">Waiting for data…</td></tr>'; return; }
   body.innerHTML = symbols.map(sym => {
     const rows = levelsBySymbol[sym] || [];
     const find = (pred) => rows.find(pred);
@@ -312,6 +390,8 @@ function renderOverview() {
     const changedAt = rows.reduce((max, r) => { const d = new Date(r.captured_at); return d > max ? d : max; }, new Date(0));
     const bias = biasRow ? (biasRow.label || '').split(' — ')[0] : '—';
     const biasClass = /bull/i.test(bias) ? 'bull' : /bear/i.test(bias) ? 'bear' : '';
+    const commentTxt = (biasRow && biasRow.raw_data && biasRow.raw_data.comment) || '';
+    const commentShort = commentTxt ? (commentTxt.length > 60 ? escHtml(commentTxt.slice(0, 60)) + '…' : escHtml(commentTxt)) : '—';
     return `
       <tr>
         <td>${sym}</td>
@@ -320,11 +400,62 @@ function renderOverview() {
         <td>${pivotRow ? pivotRow.price : '—'}</td>
         <td>${tp1Row ? tp1Row.price : '—'}</td>
         <td>${tp2Row ? tp2Row.price : '—'}</td>
+        <td class="comment-cell" title="${escHtml(commentTxt)}">${commentShort}</td>
         <td>${changedAt.getTime() ? changedAt.toLocaleString() : '—'}</td>
       </tr>
     `;
   }).join('');
 }
+
+// ---- Unified level-touch alert ----
+function tolFor(level) { return Math.abs(level) * 0.0005 || 0.0005; }
+
+function checkLevelAlerts(prices) {
+  if (!alertsEnabled) return;
+  symbols.forEach(sym => {
+    const rows = levelsBySymbol[sym] || [];
+    const biasRow = rows.find(r => typeClass(r.level_type).includes('bias'));
+    if (biasRow && lastBiasCapturedAt[sym] !== biasRow.captured_at) {
+      lastBiasCapturedAt[sym] = biasRow.captured_at;
+      lastAlertSig[sym] = ''; // new Analyst View for this symbol — allow alerting again
+    }
+    const price = prices[sym];
+    if (price == null) return;
+    const touched = [];
+    rows.forEach(r => {
+      if (typeClass(r.level_type).includes('bias')) return;
+      const lvl = Number(r.price);
+      if (!Number.isFinite(lvl)) return;
+      if (Math.abs(price - lvl) <= tolFor(lvl)) touched.push(`${shortLabel(r)} ${lvl}`);
+    });
+    if (touched.length === 0) return;
+    const sig = touched.join('|');
+    if (lastAlertSig[sym] === sig) return; // already alerted for exactly this combination
+    lastAlertSig[sym] = sig;
+    fireUnifiedAlert(sym, touched);
+  });
+}
+
+function fireUnifiedAlert(sym, touched) {
+  const msg = `${sym}: ${touched.join(', ')} touched`;
+  if (window.Notification && Notification.permission === 'granted') {
+    try { new Notification('Analyst View — level touched', { body: msg }); } catch (_) {}
+  }
+  showToast(msg);
+}
+
+function showToast(msg) {
+  let el = document.getElementById('alert-toast');
+  if (!el) { el = document.createElement('div'); el.id = 'alert-toast'; el.className = 'alert-toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+document.getElementById('enable-alerts-btn').addEventListener('click', () => {
+  if (window.Notification) Notification.requestPermission();
+});
 
 async function loadLivePrices() {
   const tdSymbols = symbols.map(s => TWELVE_DATA_SYMBOL_MAP[s]).filter(Boolean);
@@ -332,6 +463,7 @@ async function loadLivePrices() {
   try {
     const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(tdSymbols.join(','))}&apikey=${TWELVE_DATA_API_KEY}`);
     const data = await res.json();
+    const prices = {};
     symbols.forEach(sym => {
       const td = TWELVE_DATA_SYMBOL_MAP[sym];
       if (!td) return;
@@ -339,7 +471,9 @@ async function loadLivePrices() {
       const price = entry && entry.price;
       const cell = document.getElementById(`price-now-${sym}`);
       if (cell && price) cell.textContent = Number(price).toLocaleString(undefined, { maximumFractionDigits: 6 });
+      if (price) prices[sym] = Number(price);
     });
+    checkLevelAlerts(prices);
   } catch (e) { console.error('live price fetch failed', e); }
 }
 
@@ -438,7 +572,7 @@ async function loadAll() {
   });
 
   renderTabs();
-  renderLevels();
+  renderPanel();
   renderHistory(filtered);
   renderOverview();
   loadChart(activeSymbol);
@@ -447,6 +581,7 @@ async function loadAll() {
 }
 
 loadAll();
+setInterval(loadLivePrices, 30000); // keeps live prices (and the unified alert check) running between data refreshes
 
 // Live updates — no polling needed, Supabase pushes new rows over a websocket.
 supabase
@@ -459,10 +594,20 @@ supabase
 // ============================================================================
 // EXPORT TO PINE SCRIPT
 // Rebuilds your "Analyst View Historical Replay" indicator with fresh data
-// pulled from Supabase. We use the 'pivot' rows as the one-row-per-capture
+// pulled from Supabase. We use the 'bias' rows as the one-row-per-capture
 // anchor (raw_data on each row holds the full original analyst-view item —
-// id, date, direction, pivot, target1, target2 — exactly what f_add() needs).
+// id, date, direction, pivot, target1, target2, alternativeNumbers,
+// preference, alternative, comment — exactly what f_add() needs now).
 // ============================================================================
+
+function pineEscape(s) {
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r?\n/g, ' ')
+    .trim()
+    .slice(0, 400);
+}
 
 const PINE_TEMPLATE = `//@version=6
 indicator("Fusion Markets / Trading Central — Analyst View Historical Replay", overlay=true, max_lines_count=500, max_labels_count=500, max_bars_back=5000)
@@ -488,6 +633,7 @@ showTargets = input.bool(true, "Show T1 / T2", group="Chart")
 showLabels  = input.bool(false, "Show update labels", group="Chart")
 
 showDash    = input.bool(true, "Show dashboard", group="Dashboard")
+showComment = input.bool(true, "Show comment", group="Dashboard")
 showHistory = input.bool(true, "Show history table", group="Dashboard")
 historyRows = input.int(15, "History rows", minval=5, maxval=15, group="Dashboard")
 
@@ -507,6 +653,9 @@ color SELL = color.red
 
 // ============================================================================
 // DATA
+// P = pivot, A = target 1, B = target 2, C = alternative 1, D = alternative 2,
+// PREF/ALTTXT/CMT = the Preferred / Alternative / Comment text from Trading
+// Central.
 // ============================================================================
 
 var string[] S = array.new_string()
@@ -515,15 +664,25 @@ var int[]    O = array.new_int()
 var float[]  P = array.new_float()
 var float[]  A = array.new_float()
 var float[]  B = array.new_float()
+var float[]  C = array.new_float()
+var float[]  D = array.new_float()
+var string[] PREF = array.new_string()
+var string[] ALTTXT = array.new_string()
+var string[] CMT = array.new_string()
 var string[] ID = array.new_string()
 
-f_add(string s, int t, int o, float p, float a, float b, string id) =>
+f_add(string s, int t, int o, float p, float a, float b, float c, float d, string pref, string alttxt, string cmt, string id) =>
     array.push(S, s)
     array.push(T, t)
     array.push(O, o)
     array.push(P, p)
     array.push(A, a)
     array.push(B, b)
+    array.push(C, c)
+    array.push(D, d)
+    array.push(PREF, pref)
+    array.push(ALTTXT, alttxt)
+    array.push(CMT, cmt)
     array.push(ID, id)
 
 if barstate.isfirst
@@ -544,7 +703,7 @@ __DETECT_CHAIN__
 string active = autoSymbol and not na(detected) ? detected : manualSymbol
 
 f_bias(int d) =>
-    d == 1 ? "BUY" : "SELL"
+    d == 1 ? "BULLISH" : d == -1 ? "BEARISH" : "NEUTRAL"
 
 f_dt(int ts) =>
     str.format_time(ts, "dd.MM.yyyy HH:mm", TZ)
@@ -674,61 +833,62 @@ if n2 > 0
                     currentTime := tt
 
 // ============================================================================
-// DASHBOARD
+// DASHBOARD — mirrors the browser overlay panel: symbol header, colored bias,
+// Pivot/T1/T2/Alt1/Alt2 grid, then Preferred / Alternative / Comment text.
 // ============================================================================
 
 var table dash = table.new(
      position.top_right,
      2,
-     12,
+     11,
+     bgcolor=BG,
      border_width=1,
      border_color=BORDER,
      frame_color=BORDER,
      frame_width=1)
 
 if barstate.islast and showDash
-    table.clear(dash, 0, 0, 1, 11)
+    table.clear(dash, 0, 0, 1, 10)
 
     string currentBias = na(current) ? "NO DATA" : f_bias(array.get(O, current))
+    color biasColor = na(current) ? color.orange : array.get(O, current) == 1 ? BUY : array.get(O, current) == -1 ? SELL : color.gray
     string updateTime = na(current) ? "-" : f_dt(array.get(T, current))
 
-    table.cell(dash, 0, 0, "FUSION / TRADING CENTRAL", text_color=TXT, bgcolor=HDR)
-    table.cell(dash, 1, 0, active, text_color=TXT, bgcolor=HDR)
+    table.merge_cells(dash, 0, 0, 1, 0)
+    table.cell(dash, 0, 0, active + "  ·  TRADING CENTRAL", text_color=TXT, text_size=size.small, bgcolor=HDR, text_halign=text.align_left)
 
-    table.cell(dash, 0, 1, "Current View", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 1, currentBias,
-         text_color=na(current) ? color.orange : array.get(O, current) == 1 ? BUY : SELL,
-         bgcolor=BG)
+    table.merge_cells(dash, 0, 1, 1, 1)
+    table.cell(dash, 0, 1, currentBias, text_color=biasColor, text_size=size.normal, bgcolor=BG, text_halign=text.align_left)
 
-    table.cell(dash, 0, 2, "Current Update", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 2, updateTime, text_color=TXT, bgcolor=BG)
+    table.cell(dash, 0, 2, "Pivot / invalidation", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 2, na(current) ? "-" : f_price(array.get(P, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.cell(dash, 0, 3, "Total Updates", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 3, str.tostring(total), text_color=TXT, bgcolor=BG)
+    table.cell(dash, 0, 3, "Target 1", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 3, na(current) ? "-" : f_price(array.get(A, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.cell(dash, 0, 4, "BUY", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 4, str.tostring(buys), text_color=BUY, bgcolor=BG)
+    table.cell(dash, 0, 4, "Target 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 4, na(current) ? "-" : f_price(array.get(B, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.cell(dash, 0, 5, "SELL", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 5, str.tostring(sells), text_color=SELL, bgcolor=BG)
+    table.cell(dash, 0, 5, "Alternative 1", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 5, na(current) ? "-" : f_price(array.get(C, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.cell(dash, 0, 6, "Bias Changes", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 6, str.tostring(changes), text_color=TXT, bgcolor=BG)
+    table.cell(dash, 0, 6, "Alternative 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 6, na(current) ? "-" : f_price(array.get(D, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.cell(dash, 0, 7, "First Update", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 7, na(firstTime) ? "-" : f_dt(firstTime), text_color=TXT, bgcolor=BG)
+    table.merge_cells(dash, 0, 7, 1, 7)
+    string prefTxt = na(current) ? "" : array.get(PREF, current)
+    table.cell(dash, 0, 7, prefTxt == "" ? "" : "Preferred: " + prefTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    table.cell(dash, 0, 8, "Last Update", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 8, na(lastUpdate) ? "-" : f_dt(lastUpdate), text_color=TXT, bgcolor=BG)
+    table.merge_cells(dash, 0, 8, 1, 8)
+    string altTxt = na(current) ? "" : array.get(ALTTXT, current)
+    table.cell(dash, 0, 8, altTxt == "" ? "" : "Alternative: " + altTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    table.cell(dash, 0, 9, "Timezone", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 9, "Romania UTC+3", text_color=TXT, bgcolor=BG)
+    table.merge_cells(dash, 0, 9, 1, 9)
+    string cmtTxt = na(current) ? "" : array.get(CMT, current)
+    table.cell(dash, 0, 9, (showComment and cmtTxt != "") ? "Comment: " + cmtTxt : "", text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    table.cell(dash, 0, 10, "Data Records", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 10, str.tostring(total), text_color=TXT, bgcolor=BG)
-
-    table.cell(dash, 0, 11, "Mode", text_color=TXT, bgcolor=BG)
-    table.cell(dash, 1, 11, "Historical Replay", text_color=TXT, bgcolor=BG)
+    table.merge_cells(dash, 0, 10, 1, 10)
+    table.cell(dash, 0, 10, "Updated: " + updateTime, text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
 
 // ============================================================================
 // HISTORY TABLE
@@ -766,7 +926,7 @@ if barstate.islast and showHistory
                      text_color=TXT, bgcolor=BG)
 
                 table.cell(hist, 1, row, f_bias(dd),
-                     text_color=dd == 1 ? BUY : SELL, bgcolor=BG)
+                     text_color=dd == 1 ? BUY : dd == -1 ? SELL : color.gray, bgcolor=BG)
 
                 table.cell(hist, 2, row, f_price(array.get(P, z)),
                      text_color=TXT, bgcolor=BG)
@@ -794,7 +954,7 @@ async function exportPineScript() {
     const { data, error } = await supabase
       .from('analyst_levels')
       .select('symbol, raw_data, captured_at')
-      .eq('level_type', 'pivot')
+      .eq('level_type', 'bias')
       .order('captured_at', { ascending: true });
 
     if (error) throw error;
@@ -813,11 +973,19 @@ async function exportPineScript() {
       const pivot = Number(raw.pivot);
       const t1 = raw.target1 != null ? Number(raw.target1) : NaN;
       const t2 = raw.target2 != null ? Number(raw.target2) : NaN;
+      const alts = Array.isArray(raw.alternativeNumbers) ? raw.alternativeNumbers : [];
+      const alt1 = alts[0] != null ? Number(alts[0]) : NaN;
+      const alt2 = alts[1] != null ? Number(alts[1]) : NaN;
       const id = String(raw.id || '');
       const p = Number.isFinite(pivot) ? pivot : 'na';
       const a = Number.isFinite(t1) ? t1 : 'na';
       const b = Number.isFinite(t2) ? t2 : 'na';
-      return `    f_add("${r.symbol}", ${ts}, ${dir}, ${p}, ${a}, ${b}, "${id}")`;
+      const c = Number.isFinite(alt1) ? alt1 : 'na';
+      const d = Number.isFinite(alt2) ? alt2 : 'na';
+      const pref = pineEscape(raw.preference);
+      const alttxt = pineEscape(raw.alternative);
+      const cmt = pineEscape(raw.comment);
+      return `    f_add("${r.symbol}", ${ts}, ${dir}, ${p}, ${a}, ${b}, ${c}, ${d}, "${pref}", "${alttxt}", "${cmt}", "${id}")`;
     }).join('\n');
 
     const optionsList = uniqueSymbols.map(s => `"${s}"`).join(',');
