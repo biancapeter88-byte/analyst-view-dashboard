@@ -965,7 +965,23 @@ async function exportPineScript() {
 
     const uniqueSymbols = ALLOWED_SYMBOLS.filter(s => filtered.some(r => r.symbol === s));
 
-    const dataLines = filtered.map(r => {
+    // Trading Central often republishes the same view unchanged on every refresh —
+    // skip a capture if it's identical to the previous one kept for that symbol,
+    // so the export doesn't balloon with redundant rows (and stay under Pine's
+    // script size limit).
+    function sigOf(raw) {
+      const alts = Array.isArray(raw.alternativeNumbers) ? raw.alternativeNumbers : [];
+      return [raw.pivot, raw.target1, raw.target2, alts[0], alts[1], raw.opinionIntraday, raw.preference, raw.alternative, raw.comment].join('|');
+    }
+    const lastSigBySymbol = {};
+    const deduped = filtered.filter(r => {
+      const sig = sigOf(r.raw_data || {});
+      if (lastSigBySymbol[r.symbol] === sig) return false;
+      lastSigBySymbol[r.symbol] = sig;
+      return true;
+    });
+
+    const dataLines = deduped.map(r => {
       const raw = r.raw_data || {};
       const ts = raw.date ? new Date(raw.date).getTime() : new Date(r.captured_at).getTime();
       const dirNum = Number(raw.opinionIntraday);
