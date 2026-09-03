@@ -63,7 +63,7 @@
   }
   .card h2{ font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:0 0 12px; font-weight:500; }
   #chart{ width:100%; height:420px; }
-  .history{ margin-top:16px; }
+  .history{ margin-top:16px; overflow-x:auto; }
   .overview{ margin-bottom:16px; overflow-x:auto; }
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th{ text-align:left; color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; padding:6px 8px; border-bottom:1px solid var(--border); }
@@ -131,8 +131,9 @@
 
   <div class="card export-card">
     <h2>Export to TradingView (Pine Script)</h2>
-    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine file from everything captured so far, in the same historical-replay format as your script, now including alternative levels and the Preferred / Alternative / Comment text. The generated Pine also contains one multi-symbol TradingView alert that monitors the entire watchlist from a single alert. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
-    <button id="export-pine-btn" class="symbol-btn">Download .pine file</button>
+    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine backtest file using the complete captured history, but keeps only the Analyst View records where the Bias or Pivot changed. Every kept record includes its targets, alternatives, text and calculated Fib 0.236 / 0.5 / 0.786 levels. This dramatically reduces Pine size while preserving every level regime change needed for historical backtesting. The generated Pine also contains one multi-symbol TradingView alert that monitors the entire watchlist from a single alert. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
+    <button id="export-pine-btn" class="symbol-btn">Download backtest .pine file</button>
+    <button id="export-symbol-pines-btn" class="symbol-btn">Download per-symbol .pine files</button>
     <p class="export-note" style="margin-top:8px;">The exported indicator uses one TradingView alert for all 14 watchlist symbols. Default alert feed: FUSIONMARKETS.</p>
   </div>
 
@@ -155,8 +156,8 @@
   <div class="card history">
     <h2>History</h2>
     <table>
-      <thead><tr><th>Time</th><th>Symbol</th><th>Type</th><th>Price</th><th>Label</th></tr></thead>
-      <tbody id="history-body"><tr><td colspan="5" class="empty">Waiting for data…</td></tr></tbody>
+      <thead><tr><th>Time</th><th>Symbol</th><th>Type</th><th>Price</th><th>Label</th><th>Fib 0.236</th><th>Fib 0.5</th><th>Fib 0.786</th></tr></thead>
+      <tbody id="history-body"><tr><td colspan="8" class="empty">Waiting for data…</td></tr></tbody>
     </table>
   </div>
 </main>
@@ -365,16 +366,24 @@ function renderHistoryMini() {
 
 function renderHistory(rows) {
   const body = document.getElementById('history-body');
-  if (!rows || rows.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty">No history yet</td></tr>'; return; }
-  body.innerHTML = rows.slice(0, 50).map(r => `
-    <tr>
-      <td>${new Date(r.captured_at).toLocaleString()}</td>
-      <td>${r.symbol}</td>
-      <td>${r.level_type}</td>
-      <td>${r.price}</td>
-      <td>${r.label || ''}</td>
-    </tr>
-  `).join('');
+  if (!rows || rows.length === 0) { body.innerHTML = '<tr><td colspan="8" class="empty">No history yet</td></tr>'; return; }
+  body.innerHTML = rows.map(r => {
+    const raw = r.raw_data || {};
+    const p = Number(raw.pivot), t1 = Number(raw.target1);
+    const f = (pct) => Number.isFinite(p) && Number.isFinite(t1) ? (p + (t1 - p) * pct).toLocaleString(undefined, { maximumFractionDigits: 6 }) : '—';
+    return `
+      <tr>
+        <td>${new Date(r.captured_at).toLocaleString()}</td>
+        <td>${r.symbol}</td>
+        <td>${r.level_type}</td>
+        <td>${r.price}</td>
+        <td>${escHtml(r.label || '')}</td>
+        <td>${f(0.236)}</td>
+        <td>${f(0.5)}</td>
+        <td>${f(0.786)}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderOverview() {
@@ -547,15 +556,21 @@ async function loadChart(symbol) {
 }
 
 async function loadAll() {
-  const { data, error } = await supabase
-    .from('analyst_levels')
-    .select('*')
-    .order('captured_at', { ascending: false })
-    .limit(1000);
+  const PAGE_SIZE = 1000;
+  const allData = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from('analyst_levels')
+      .select('*')
+      .order('captured_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) { setSyncLabel('error — see console'); console.error(error); return; }
+    if (!page || page.length === 0) break;
+    allData.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
 
-  if (error) { setSyncLabel('error — see console'); console.error(error); return; }
-
-  const filtered = data.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
+  const filtered = allData.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
 
   symbols = ALLOWED_SYMBOLS.filter(s => filtered.some(r => r.symbol === s));
   if (!activeSymbol || !symbols.includes(activeSymbol)) activeSymbol = symbols[0];
@@ -624,7 +639,9 @@ indicator("Fusion Markets / Trading Central — Analyst View Historical Replay",
 //
 // Generated automatically from the Supabase pipeline — re-export any time
 // for a fresh snapshot; Pine Script cannot pull live data on its own. This
-// export dedupes unchanged captures and keeps only the last 4 captures per symbol.
+// export keeps every meaningful historical state change: first capture + every Bias/Pivot change.
+// The complete raw history remains available in the dashboard. Data is loaded in chunks so Pine
+// does not receive one oversized if barstate.isfirst block. Fib levels are calculated per kept state.
 // ============================================================================
 
 string TZ = "GMT+3"
@@ -669,7 +686,8 @@ f_line_style(string s) =>
 
 // ============================================================================
 // DATA
-// P = pivot, A = target 1, B = target 2, C = alternative 1, D = alternative 2,
+// P = pivot, A = target 1, B = target 2, C = alternative 1, D = alternative 2.
+// F236/F5/F786 are calculated and stored for every capture from pivot → target 1.
 // PREF/ALTTXT/CMT = the Preferred / Alternative / Comment text from Trading
 // Central.
 // ============================================================================
@@ -686,6 +704,9 @@ var string[] PREF = array.new_string()
 var string[] ALTTXT = array.new_string()
 var string[] CMT = array.new_string()
 var string[] ID = array.new_string()
+var float[] F236 = array.new_float()
+var float[] F5 = array.new_float()
+var float[] F786 = array.new_float()
 
 f_add(string s, int t, int o, float p, float a, float b, float c, float d, string pref, string alttxt, string cmt, string id) =>
     array.push(S, s)
@@ -700,9 +721,14 @@ f_add(string s, int t, int o, float p, float a, float b, float c, float d, strin
     array.push(ALTTXT, alttxt)
     array.push(CMT, cmt)
     array.push(ID, id)
+    array.push(F236, not na(p) and not na(a) ? p + (a - p) * 0.236 : na)
+    array.push(F5, not na(p) and not na(a) ? p + (a - p) * 0.5 : na)
+    array.push(F786, not na(p) and not na(a) ? p + (a - p) * 0.786 : na)
+
+__DATA_FUNCTIONS__
 
 if barstate.isfirst
-__DATA_LINES__
+__DATA_CALLS__
 
 // ============================================================================
 // SYMBOL DETECTION
@@ -752,8 +778,11 @@ f_wrap_text(string s, int maxLen) =>
         result
 
 // ============================================================================
-// HISTORICAL LINES (+ Fibonacci levels for the active/current capture)
+// HISTORICAL LINES
 // ============================================================================
+// Pivot / targets use time-based line segments. Fibonacci levels are plotted as
+// normal series below, which means the Fib history can cover every capture
+// without consuming one of TradingView's 500 line objects.
 
 var line[] histLines = array.new_line()
 var label[] histLabels = array.new_label()
@@ -827,16 +856,6 @@ if barstate.islast
                                  textcolor=color.white,
                                  color=c))
 
-                        // This is the active symbol's most recent capture (no later
-                        // one exists) — draw the 3 Fib levels between pivot and TP1,
-                        // pinned and extending to the right like the other lines.
-                        if na(nextT) and showFib and not na(pivot) and not na(t1)
-                            float f236 = pivot + (t1 - pivot) * 0.236
-                            float f5   = pivot + (t1 - pivot) * 0.5
-                            float f786 = pivot + (t1 - pivot) * 0.786
-                            array.push(histLines, line.new(startT, f236, endT, f236, xloc=xloc.bar_time, extend=extend.right, color=fib236Color, style=f_line_style(fib236Style), width=fib236Width))
-                            array.push(histLines, line.new(startT, f5,   endT, f5,   xloc=xloc.bar_time, extend=extend.right, color=fib5Color, style=f_line_style(fib5Style), width=fib5Width))
-                            array.push(histLines, line.new(startT, f786, endT, f786, xloc=xloc.bar_time, extend=extend.right, color=fib786Color, style=f_line_style(fib786Style), width=fib786Width))
 
 // ============================================================================
 // CURRENT VIEW + STATISTICS
@@ -891,6 +910,15 @@ float curAlt2  = na(current) ? na : array.get(D, current)
 float curFib236 = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.236 : na
 float curFib5   = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.5   : na
 float curFib786 = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.786 : na
+
+// Fib history is rendered as series, so every historical capture gets its own
+// Fib values without adding three line objects per capture. Plot styles are
+// controlled independently for color/width; TradingView plot series do not
+// support dashed/dotted line styles, so style inputs remain available for any
+// time-based Fib drawing mode added later.
+plot(showFib ? curFib236 : na, title="Fib 0.236", color=fib236Color, linewidth=fib236Width, style=plot.style_linebr)
+plot(showFib ? curFib5 : na, title="Fib 0.5", color=fib5Color, linewidth=fib5Width, style=plot.style_linebr)
+plot(showFib ? curFib786 : na, title="Fib 0.786", color=fib786Color, linewidth=fib786Width, style=plot.style_linebr)
 
 // ============================================================================
 // MULTI-SYMBOL UNIFIED ALERT
@@ -1151,74 +1179,111 @@ if barstate.islast and showHistory
 // ============================================================================
 `;
 
+
+// Keep the full dashboard history, but compress the Pine backtest dataset to
+// meaningful Analyst View state changes: the first valid capture for each
+// symbol, then every later capture where either BIAS or PIVOT changed.
+// Targets/alternatives/text from that exact capture are retained, and Fib
+// levels are calculated from that capture's Pivot -> Target 1.
+function getBacktestChangeRows(rows) {
+  const sorted = [...rows].sort((a, b) => new Date(a.captured_at) - new Date(b.captured_at));
+  const out = [];
+  const lastBySymbol = {};
+
+  for (const r of sorted) {
+    const raw = r.raw_data || {};
+    const bias = Number(raw.opinionIntraday);
+    const pivot = raw.pivot != null && Number.isFinite(Number(raw.pivot)) ? Number(raw.pivot) : null;
+    const prev = lastBySymbol[r.symbol];
+
+    // First capture establishes the historical state. Thereafter we only keep
+    // a record when the direction or pivot actually changes.
+    const changed = !prev || bias !== prev.bias || pivot !== prev.pivot;
+    if (changed) {
+      out.push(r);
+      lastBySymbol[r.symbol] = { bias, pivot };
+    }
+  }
+  return out;
+}
+
 async function exportPineScript() {
   const btn = document.getElementById('export-pine-btn');
   const originalText = btn.textContent;
   btn.textContent = 'Generating…';
   btn.disabled = true;
   try {
-    const { data, error } = await supabase
-      .from('analyst_levels')
-      .select('symbol, raw_data, captured_at')
-      .eq('level_type', 'bias')
-      .order('captured_at', { ascending: true });
+    // Supabase/PostgREST commonly caps a single response at 1000 rows.
+    // Fetch every page so the export contains the complete historical dataset.
+    const PAGE_SIZE = 1000;
+    const allRows = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error } = await supabase
+        .from('analyst_levels')
+        .select('symbol, raw_data, captured_at')
+        .eq('level_type', 'bias')
+        .order('captured_at', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!page || page.length === 0) break;
+      allRows.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
 
-    if (error) throw error;
-    if (!data || data.length === 0) { alert('No data captured yet.'); return; }
+    if (allRows.length === 0) { alert('No data captured yet.'); return; }
 
-    const filtered = data.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
+    const filtered = allRows.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
     if (filtered.length === 0) { alert('No data captured yet for your watchlist symbols.'); return; }
 
-    const uniqueSymbols = ALLOWED_SYMBOLS.filter(s => filtered.some(r => r.symbol === s));
-
-    // Trading Central often republishes the same view unchanged on every refresh —
-    // skip a capture if it's identical to the previous one kept for that symbol,
-    // so the export doesn't balloon with redundant rows (and stay under Pine's
-    // script size limit).
-    function sigOf(raw) {
-      const alts = Array.isArray(raw.alternativeNumbers) ? raw.alternativeNumbers : [];
-      return [raw.pivot, raw.target1, raw.target2, alts[0], alts[1], raw.opinionIntraday, raw.preference, raw.alternative, raw.comment].join('|');
-    }
-    const lastSigBySymbol = {};
-    const deduped = filtered.filter(r => {
-      const sig = sigOf(r.raw_data || {});
-      if (lastSigBySymbol[r.symbol] === sig) return false;
-      lastSigBySymbol[r.symbol] = sig;
-      return true;
-    });
-
-    // Keep only the last few captures per symbol — the full history made the
-    // exported script too large to compile. `deduped` is chronological
-    // ascending, so per symbol we keep the tail end (most recent) in order.
-    const MAX_PER_SYMBOL = 4; // latest 4 captures per symbol
+    // Backtest dataset = first capture + every later BIAS/PIVOT change.
+    // The dashboard itself still keeps and displays the complete raw history.
+    const changedRows = getBacktestChangeRows(filtered);
     const bySymbol = {};
-    deduped.forEach(r => { (bySymbol[r.symbol] ||= []).push(r); });
-    const capped = Object.values(bySymbol)
-      .flatMap(rows => rows.slice(-MAX_PER_SYMBOL))
-      .sort((a, b) => new Date(a.captured_at) - new Date(b.captured_at));
+    changedRows.forEach(r => { (bySymbol[r.symbol] ||= []).push(r); });
 
-    const dataLines = capped.map(r => {
+    function pineNum(v) {
+      return Number.isFinite(Number(v)) ? String(Number(v)) : 'na';
+    }
+
+    function makeDataLine(r) {
       const raw = r.raw_data || {};
       const ts = raw.date ? new Date(raw.date).getTime() : new Date(r.captured_at).getTime();
       const dirNum = Number(raw.opinionIntraday);
       const dir = dirNum > 0 ? 1 : dirNum < 0 ? -1 : 0;
-      const pivot = Number(raw.pivot);
+      const pivot = raw.pivot != null ? Number(raw.pivot) : NaN;
       const t1 = raw.target1 != null ? Number(raw.target1) : NaN;
       const t2 = raw.target2 != null ? Number(raw.target2) : NaN;
       const alts = Array.isArray(raw.alternativeNumbers) ? raw.alternativeNumbers : [];
       const alt1 = alts[0] != null ? Number(alts[0]) : NaN;
       const alt2 = alts[1] != null ? Number(alts[1]) : NaN;
       const id = String(raw.id || '');
-      const p = Number.isFinite(pivot) ? pivot : 'na';
-      const a = Number.isFinite(t1) ? t1 : 'na';
-      const b = Number.isFinite(t2) ? t2 : 'na';
-      const c = Number.isFinite(alt1) ? alt1 : 'na';
-      const d = Number.isFinite(alt2) ? alt2 : 'na';
       const pref = pineEscape(raw.preference);
       const alttxt = pineEscape(raw.alternative);
       const cmt = pineEscape(raw.comment);
-      return `    f_add("${r.symbol}", ${ts}, ${dir}, ${p}, ${a}, ${b}, ${c}, ${d}, "${pref}", "${alttxt}", "${cmt}", "${id}")`;
-    }).join('\n');
+      return `    f_add("${r.symbol}", ${ts}, ${dir}, ${pineNum(pivot)}, ${pineNum(t1)}, ${pineNum(t2)}, ${pineNum(alt1)}, ${pineNum(alt2)}, "${pref}", "${alttxt}", "${cmt}", "${id}")`;
+    }
+
+    // Pine's compiler is much happier with many small functions than one giant
+    // `if barstate.isfirst` containing thousands of statements.  40 captures per
+    // function is deliberately conservative; each function is then called once.
+    const CHUNK_SIZE = 40;
+    const loaderFunctions = [];
+    const loaderCalls = [];
+    let chunkNo = 0;
+
+    ALLOWED_SYMBOLS.forEach(sym => {
+      const rows = bySymbol[sym] || [];
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        chunkNo++;
+        const fn = `f_load_${sym}_${String(Math.floor(i / CHUNK_SIZE) + 1).padStart(3, '0')}`;
+        loaderFunctions.push(`${fn}() =>\n${chunk.map(makeDataLine).join('\n')}`);
+        loaderCalls.push(`    ${fn}()`);
+      }
+    });
+
+    const dataBlock = loaderFunctions.join('\n\n');
+    const dataLoadCalls = loaderCalls.join('\n');
 
     const optionsList = ALLOWED_SYMBOLS.map(s => `"${s}"`).join(',');
 
@@ -1228,7 +1293,8 @@ async function exportPineScript() {
       .join('\n');
 
     const script = PINE_TEMPLATE
-      .replace('__DATA_LINES__', dataLines)
+      .replace('__DATA_FUNCTIONS__', dataBlock)
+      .replace('__DATA_CALLS__', dataLoadCalls)
       .replace('__OPTIONS_LIST__', optionsList)
       .replace('__DETECT_CHAIN__', detectChain ? detectChain + '\n' : '');
 
@@ -1236,7 +1302,7 @@ async function exportPineScript() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'fusion_analyst_view_export.pine';
+    a.download = 'fusion_analyst_view_backtest_bias_pivot_changes.pine';
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
@@ -1248,7 +1314,86 @@ async function exportPineScript() {
   }
 }
 
+async function exportPerSymbolPines() {
+  const btn = document.getElementById('export-symbol-pines-btn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+  try {
+    const PAGE_SIZE = 1000;
+    const allRows = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error } = await supabase
+        .from('analyst_levels')
+        .select('symbol, raw_data, captured_at')
+        .eq('level_type', 'bias')
+        .order('captured_at', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!page || page.length === 0) break;
+      allRows.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    const filtered = allRows.filter(r => ALLOWED_SYMBOLS.includes(r.symbol));
+    if (!filtered.length) { alert('No data captured yet.'); return; }
+
+    // Same compact historical state-change dataset as the combined exporter.
+    const changedRows = getBacktestChangeRows(filtered);
+    const bySymbol = {};
+    changedRows.forEach(r => { (bySymbol[r.symbol] ||= []).push(r); });
+    function pineNum(v) { return Number.isFinite(Number(v)) ? String(Number(v)) : 'na'; }
+    function makeDataLine(r) {
+      const raw = r.raw_data || {};
+      const ts = raw.date ? new Date(raw.date).getTime() : new Date(r.captured_at).getTime();
+      const dn = Number(raw.opinionIntraday);
+      const dir = dn > 0 ? 1 : dn < 0 ? -1 : 0;
+      const p = raw.pivot != null ? Number(raw.pivot) : NaN;
+      const a = raw.target1 != null ? Number(raw.target1) : NaN;
+      const b = raw.target2 != null ? Number(raw.target2) : NaN;
+      const alts = Array.isArray(raw.alternativeNumbers) ? raw.alternativeNumbers : [];
+      const c = alts[0] != null ? Number(alts[0]) : NaN;
+      const d = alts[1] != null ? Number(alts[1]) : NaN;
+      return `    f_add("${r.symbol}", ${ts}, ${dir}, ${pineNum(p)}, ${pineNum(a)}, ${pineNum(b)}, ${pineNum(c)}, ${pineNum(d)}, "${pineEscape(raw.preference)}", "${pineEscape(raw.alternative)}", "${pineEscape(raw.comment)}", "${String(raw.id || '')}")`;
+    }
+    let count = 0;
+    for (const sym of ALLOWED_SYMBOLS) {
+      const rows = bySymbol[sym] || [];
+      if (!rows.length) continue;
+      const funcs = [], calls = [];
+      const chunkSize = 40;
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const fn = `f_load_${sym}_${String(Math.floor(i / chunkSize) + 1).padStart(3, '0')}`;
+        funcs.push(`${fn}() =>\n${rows.slice(i, i + chunkSize).map(makeDataLine).join('\n')}`);
+        calls.push(`    ${fn}()`);
+      }
+      const detect = `     str.contains(tv, "${sym}") ? "${sym}" :\n`;
+      const one = PINE_TEMPLATE
+        .replace('__DATA_FUNCTIONS__', funcs.join('\n\n'))
+        .replace('__DATA_CALLS__', calls.join('\n'))
+        .replace('__OPTIONS_LIST__', `"${sym}"`)
+        .replace('__DETECT_CHAIN__', detect);
+      const blob = new Blob([one], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fusion_analyst_view_${sym}_full_history.pine`;
+      a.click();
+      URL.revokeObjectURL(url);
+      count++;
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+    alert(`Generated ${count} per-symbol Pine file(s) using Bias/Pivot changes only. Fib levels are included for every kept historical state.`);
+  } catch (e) {
+    console.error('Per-symbol Pine export failed', e);
+    alert('Per-symbol export failed — see console for details.');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
 document.getElementById('export-pine-btn').addEventListener('click', exportPineScript);
+document.getElementById('export-symbol-pines-btn').addEventListener('click', exportPerSymbolPines);
 </script>
 </body>
 </html>
