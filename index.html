@@ -745,10 +745,10 @@ f_wrap_text(string s, int maxLen) =>
                 else if str.length(currentLine) + 1 + str.length(word) <= maxLen
                     currentLine := currentLine + " " + word
                 else
-                    result := result == "" ? currentLine : result + "\n" + currentLine
+                    result := result == "" ? currentLine : result + "\\n" + currentLine
                     currentLine := word
         if currentLine != ""
-            result := result == "" ? currentLine : result + "\n" + currentLine
+            result := result == "" ? currentLine : result + "\\n" + currentLine
         result
 
 // ============================================================================
