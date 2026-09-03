@@ -55,7 +55,7 @@
   }
   .symbol-btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
   .symbol-btn.active{ color:var(--amber); border-color:var(--amber); background:rgba(217,169,78,0.08); }
-  .layout{ display:grid; grid-template-columns:1fr 300px; gap:16px; }
+  .layout{ display:grid; grid-template-columns:1fr 276px; gap:16px; }
   @media (max-width: 780px){ .layout{ grid-template-columns:1fr; } }
   .card{
     background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -79,7 +79,7 @@
   .chart-card-head h2{ margin:0; }
 
   /* ---- Trading Central-style panel (matches the TradingView overlay panel look) ---- */
-  .tc-panel{ background:#131c2e; border:1px solid #2a3550; border-radius:10px; padding:14px; font-family:'JetBrains Mono', monospace; }
+  .tc-panel{ background:#131c2e; border:1px solid #2a3550; border-radius:10px; padding:12px; font-family:'JetBrains Mono', monospace; min-height:520px; }
   .tc-panel .tc-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:11px; color:var(--muted); letter-spacing:0.04em; }
   .tc-panel .tc-bias{ font-size:19px; font-weight:700; margin-bottom:12px; letter-spacing:0.02em; }
   .tc-panel .tc-bias.bull{ color:#3fa796; }
@@ -88,7 +88,7 @@
   .tc-panel .tc-grid{ display:grid; grid-template-columns:1fr auto; gap:7px 12px; font-size:13px; margin-bottom:12px; }
   .tc-panel .tc-grid .lbl{ color:var(--muted); }
   .tc-panel .tc-grid .val{ font-weight:700; text-align:right; color:var(--text); }
-  .tc-panel .tc-text{ font-size:12px; color:#c7cbd4; margin-bottom:8px; line-height:1.5; font-family:'Space Grotesk', sans-serif; }
+  .tc-panel .tc-text{ font-size:11.5px; color:#c7cbd4; margin-bottom:8px; line-height:1.5; font-family:'Space Grotesk', sans-serif; }
   .tc-panel .tc-text b{ color:var(--text); }
   .tc-panel .tc-controls{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-top:8px; border-top:1px solid #2a3550; padding-top:10px; font-family:'Space Grotesk', sans-serif; }
   .tc-panel .tc-controls label{ display:flex; align-items:center; gap:5px; cursor:pointer; }
@@ -131,8 +131,9 @@
 
   <div class="card export-card">
     <h2>Export to TradingView (Pine Script)</h2>
-    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine file from everything captured so far, in the same historical-replay format as your script, now including alternative levels and the Preferred / Alternative / Comment text. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
+    <p class="export-note">Pine Script can't pull live data from the internet — a TradingView platform limit, not something we can work around. This generates a ready-to-paste .pine file from everything captured so far, in the same historical-replay format as your script, now including alternative levels and the Preferred / Alternative / Comment text. The generated Pine also contains one multi-symbol TradingView alert that monitors the entire watchlist from a single alert. Paste it into the Pine Editor and click "Add to chart" whenever you want a refresh. Your overlay on the TradingView tab already updates live on its own — this export is for a native, publishable indicator instead.</p>
     <button id="export-pine-btn" class="symbol-btn">Download .pine file</button>
+    <p class="export-note" style="margin-top:8px;">The exported indicator uses one TradingView alert for all 14 watchlist symbols. Default alert feed: FUSIONMARKETS.</p>
   </div>
 
   <div class="symbols" id="symbol-tabs"></div>
@@ -609,7 +610,7 @@ function pineEscape(s) {
 }
 
 const PINE_TEMPLATE = `//@version=6
-indicator("Fusion Markets / Trading Central — Analyst View Historical Replay", overlay=true, max_lines_count=500, max_labels_count=500, max_bars_back=5000)
+indicator("Fusion Markets / Trading Central — Analyst View Historical Replay", overlay=true, max_lines_count=500, max_labels_count=500, max_bars_back=5000, dynamic_requests=true)
 
 // ============================================================================
 // PURPOSE
@@ -623,7 +624,7 @@ indicator("Fusion Markets / Trading Central — Analyst View Historical Replay",
 //
 // Generated automatically from the Supabase pipeline — re-export any time
 // for a fresh snapshot; Pine Script cannot pull live data on its own. This
-// export dedupes unchanged captures and keeps only the latest 4 per symbol.
+// export dedupes unchanged captures and keeps only the last 4 captures per symbol.
 // ============================================================================
 
 string TZ = "GMT+3"
@@ -653,15 +654,12 @@ color BORDER  = color.rgb(65, 65, 75)
 color BUY     = color.lime
 color SELL    = color.red
 
-// Fibonacci appearance — each level can be styled independently from Settings.
 fib236Color = input.color(color.rgb(200, 162, 230), "Fib 0.236 color", group="Fibonacci")
 fib236Style = input.string("Dotted", "Fib 0.236 style", options=["Solid", "Dashed", "Dotted"], group="Fibonacci")
 fib236Width = input.int(1, "Fib 0.236 width", minval=1, maxval=4, group="Fibonacci")
-
 fib5Color = input.color(color.rgb(255, 140, 140), "Fib 0.5 color", group="Fibonacci")
 fib5Style = input.string("Dotted", "Fib 0.5 style", options=["Solid", "Dashed", "Dotted"], group="Fibonacci")
 fib5Width = input.int(1, "Fib 0.5 width", minval=1, maxval=4, group="Fibonacci")
-
 fib786Color = input.color(color.rgb(135, 206, 250), "Fib 0.786 color", group="Fibonacci")
 fib786Style = input.string("Dotted", "Fib 0.786 style", options=["Solid", "Dashed", "Dotted"], group="Fibonacci")
 fib786Width = input.int(1, "Fib 0.786 width", minval=1, maxval=4, group="Fibonacci")
@@ -729,9 +727,9 @@ f_dt(int ts) =>
 f_price(float x) =>
     na(x) ? "-" : str.tostring(x, format.mintick)
 
-// Word-aware wrapping for Preferred / Alternative / Comment.
-// Text is kept as a single dashboard cell, so it can occupy as many visual
-// lines as needed instead of being forced into exactly three rows.
+// Word-aware wrapping. The dashboard is intentionally narrower, so text is
+// wrapped into natural lines and the panel grows vertically instead of forcing
+// Comment into exactly three rows.
 f_wrap_text(string s, int maxLen) =>
     if str.length(s) == 0
         ""
@@ -895,65 +893,148 @@ float curFib5   = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - cur
 float curFib786 = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.786 : na
 
 // ============================================================================
-// UNIFIED DAILY ALERT
-// One combined alert() call for whatever levels are touched on a given bar —
-// not a separate alert per level. Each level fires at most once per day (the
-// first touch); flags reset at the start of a new trading day. Covers pivot,
-// TP1, TP2, both alternatives, and Fib 0.236 / 0.786. Add a TradingView alert
-// on this indicator with condition "Any alert() function call" — alert()
-// alone doesn't push a notification unless that platform alert is armed.
+// MULTI-SYMBOL UNIFIED ALERT
+// One TradingView alert on any chart symbol monitors the complete watchlist.
+// The chart symbol is NOT the limitation: every symbol below gets its own
+// live high/low series and its own current Analyst View capture.
 // ============================================================================
 
-var bool alertedPivot  = false
-var bool alertedT1     = false
-var bool alertedT2     = false
-var bool alertedAlt1   = false
-var bool alertedAlt2   = false
-var bool alertedFib236 = false
-var bool alertedFib786 = false
+// Feed used for the live cross-symbol checks. The default matches the OANDA
+// feed shown in the supplied TradingView screenshots.
+alertFeed = input.string("FUSIONMARKETS:", "Alert data feed prefix", group="Alerts")
+alertOnPivot = input.bool(true, "Pivot", group="Alerts")
+alertOnTargets = input.bool(true, "Targets", group="Alerts")
+alertOnAlternatives = input.bool(true, "Alternatives", group="Alerts")
+alertOnFib = input.bool(true, "Fib 0.236 / 0.786", group="Alerts")
+
+// Current capture lookup for any watchlist symbol.
+f_current_for_symbol(string sym) =>
+    int idx = na
+    int bestTime = na
+    int n = array.size(S)
+    if n > 0
+        for i = 0 to n - 1
+            if array.get(S, i) == sym
+                int tt = array.get(T, i)
+                if tt <= time and (na(bestTime) or tt > bestTime)
+                    bestTime := tt
+                    idx := i
+    idx
+
+f_add_alert_part(string base, string key, string text, bool touched, bool enabled, string state) =>
+    string out = base
+    string nextState = state
+    if enabled and touched and not str.contains("|" + state + "|", "|" + key + "|")
+        out := out == "" ? text : out + ", " + text
+        nextState := state == "" ? key : state + "|" + key
+    [out, nextState]
+
+// The 14 request.security() calls are explicit so the generated indicator
+// stays deterministic and well below TradingView's unique-request limit.
+[xauH, xauL] = request.security(alertFeed + "XAUUSD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[xagH, xagL] = request.security(alertFeed + "XAGUSD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[eurH, eurL] = request.security(alertFeed + "EURUSD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[gbpH, gbpL] = request.security(alertFeed + "GBPUSD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[audH, audL] = request.security(alertFeed + "AUDUSD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[nzdH, nzdL] = request.security(alertFeed + "NZDUSD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[ucH, ucL] = request.security(alertFeed + "USDCAD", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[ujH, ujL] = request.security(alertFeed + "USDJPY", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[usH, usL] = request.security(alertFeed + "USDCHF", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[egH, egL] = request.security(alertFeed + "EURGBP", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[ajH, ajL] = request.security(alertFeed + "AUDJPY", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[ejH, ejL] = request.security(alertFeed + "EURJPY", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[gjH, gjL] = request.security(alertFeed + "GBPJPY", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+[acH, acL] = request.security(alertFeed + "AUDCHF", timeframe.period, [high, low], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+
+var string[] alertedState = array.new_string(14, "")
+var int[] lastCaptureIdx = array.new_int(14, -1)
 
 bool newDay = ta.change(time("D")) != 0
 if newDay
-    alertedPivot  := false
-    alertedT1     := false
-    alertedT2     := false
-    alertedAlt1   := false
-    alertedAlt2   := false
-    alertedFib236 := false
-    alertedFib786 := false
+    array.fill(alertedState, "")
+    array.fill(lastCaptureIdx, -1)
 
-var string[] touchedNow = array.new_string()
-array.clear(touchedNow)
+f_check_symbol(string sym, float hi, float lo, int stateIndex) =>
+    string msg = ""
+    int idx = f_current_for_symbol(sym)
+    if not na(idx)
+        int previousIdx = array.get(lastCaptureIdx, stateIndex)
+        if previousIdx != idx
+            array.set(lastCaptureIdx, stateIndex, idx)
+            array.set(alertedState, stateIndex, "")
 
-if not alertedPivot and not na(curPivot) and low <= curPivot and high >= curPivot
-    array.push(touchedNow, "Pivot " + str.tostring(curPivot, format.mintick))
-    alertedPivot := true
-if not alertedT1 and not na(curT1) and low <= curT1 and high >= curT1
-    array.push(touchedNow, "TP1 " + str.tostring(curT1, format.mintick))
-    alertedT1 := true
-if not alertedT2 and not na(curT2) and low <= curT2 and high >= curT2
-    array.push(touchedNow, "TP2 " + str.tostring(curT2, format.mintick))
-    alertedT2 := true
-if not alertedAlt1 and not na(curAlt1) and low <= curAlt1 and high >= curAlt1
-    array.push(touchedNow, "Alt1 " + str.tostring(curAlt1, format.mintick))
-    alertedAlt1 := true
-if not alertedAlt2 and not na(curAlt2) and low <= curAlt2 and high >= curAlt2
-    array.push(touchedNow, "Alt2 " + str.tostring(curAlt2, format.mintick))
-    alertedAlt2 := true
-if showFib and not alertedFib236 and not na(curFib236) and low <= curFib236 and high >= curFib236
-    array.push(touchedNow, "Fib 0.236 " + str.tostring(curFib236, format.mintick))
-    alertedFib236 := true
-if showFib and not alertedFib786 and not na(curFib786) and low <= curFib786 and high >= curFib786
-    array.push(touchedNow, "Fib 0.786 " + str.tostring(curFib786, format.mintick))
-    alertedFib786 := true
+        string state = array.get(alertedState, stateIndex)
+        float pivot = array.get(P, idx)
+        float t1 = array.get(A, idx)
+        float t2 = array.get(B, idx)
+        float alt1 = array.get(C, idx)
+        float alt2 = array.get(D, idx)
+        float fib236 = (not na(pivot) and not na(t1)) ? pivot + (t1 - pivot) * 0.236 : na
+        float fib786 = (not na(pivot) and not na(t1)) ? pivot + (t1 - pivot) * 0.786 : na
 
-if array.size(touchedNow) > 0
-    alert(active + " touched: " + array.join(touchedNow, ", "), alert.freq_once_per_bar)
+        [msg, state] = f_add_alert_part(msg, "P", "Pivot " + f_price(pivot), not na(pivot) and lo <= pivot and hi >= pivot, alertOnPivot, state)
+        [msg, state] = f_add_alert_part(msg, "T1", "TP1 " + f_price(t1), not na(t1) and lo <= t1 and hi >= t1, alertOnTargets, state)
+        [msg, state] = f_add_alert_part(msg, "T2", "TP2 " + f_price(t2), not na(t2) and lo <= t2 and hi >= t2, alertOnTargets, state)
+        [msg, state] = f_add_alert_part(msg, "A1", "Alt1 " + f_price(alt1), not na(alt1) and lo <= alt1 and hi >= alt1, alertOnAlternatives, state)
+        [msg, state] = f_add_alert_part(msg, "A2", "Alt2 " + f_price(alt2), not na(alt2) and lo <= alt2 and hi >= alt2, alertOnAlternatives, state)
+        [msg, state] = f_add_alert_part(msg, "F236", "Fib 0.236 " + f_price(fib236), not na(fib236) and lo <= fib236 and hi >= fib236, alertOnFib, state)
+        [msg, state] = f_add_alert_part(msg, "F786", "Fib 0.786 " + f_price(fib786), not na(fib786) and lo <= fib786 and hi >= fib786, alertOnFib, state)
+
+        array.set(alertedState, stateIndex, state)
+    msg
+
+var string[] multiAlertParts = array.new_string()
+array.clear(multiAlertParts)
+
+m0 = f_check_symbol("XAUUSD", xauH, xauL, 0)
+if m0 != ""
+    array.push(multiAlertParts, "XAUUSD: " + m0)
+m1 = f_check_symbol("XAGUSD", xagH, xagL, 1)
+if m1 != ""
+    array.push(multiAlertParts, "XAGUSD: " + m1)
+m2 = f_check_symbol("EURUSD", eurH, eurL, 2)
+if m2 != ""
+    array.push(multiAlertParts, "EURUSD: " + m2)
+m3 = f_check_symbol("GBPUSD", gbpH, gbpL, 3)
+if m3 != ""
+    array.push(multiAlertParts, "GBPUSD: " + m3)
+m4 = f_check_symbol("AUDUSD", audH, audL, 4)
+if m4 != ""
+    array.push(multiAlertParts, "AUDUSD: " + m4)
+m5 = f_check_symbol("NZDUSD", nzdH, nzdL, 5)
+if m5 != ""
+    array.push(multiAlertParts, "NZDUSD: " + m5)
+m6 = f_check_symbol("USDCAD", ucH, ucL, 6)
+if m6 != ""
+    array.push(multiAlertParts, "USDCAD: " + m6)
+m7 = f_check_symbol("USDJPY", ujH, ujL, 7)
+if m7 != ""
+    array.push(multiAlertParts, "USDJPY: " + m7)
+m8 = f_check_symbol("USDCHF", usH, usL, 8)
+if m8 != ""
+    array.push(multiAlertParts, "USDCHF: " + m8)
+m9 = f_check_symbol("EURGBP", egH, egL, 9)
+if m9 != ""
+    array.push(multiAlertParts, "EURGBP: " + m9)
+m10 = f_check_symbol("AUDJPY", ajH, ajL, 10)
+if m10 != ""
+    array.push(multiAlertParts, "AUDJPY: " + m10)
+m11 = f_check_symbol("EURJPY", ejH, ejL, 11)
+if m11 != ""
+    array.push(multiAlertParts, "EURJPY: " + m11)
+m12 = f_check_symbol("GBPJPY", gjH, gjL, 12)
+if m12 != ""
+    array.push(multiAlertParts, "GBPJPY: " + m12)
+m13 = f_check_symbol("AUDCHF", acH, acL, 13)
+if m13 != ""
+    array.push(multiAlertParts, "AUDCHF: " + m13)
+
+if array.size(multiAlertParts) > 0
+    alert("Analyst View — " + array.join(multiAlertParts, " | "), alert.freq_once_per_bar)
 
 // ============================================================================
-// DASHBOARD — Trading Central / Fusion Markets style
-// The card mirrors the supplied screenshot: compact level grid followed by
-// fluid Preferred / Alternative / Comment paragraphs and the update time.
+// DASHBOARD — Trading Central style, narrower + taller
+// Preferred / Alternative / Comment use natural wrapping instead of fixed rows.
 // ============================================================================
 
 var table dash = table.new(
@@ -974,55 +1055,36 @@ if barstate.islast and showDash
     string updateTime = na(current) ? "-" : f_dt(array.get(T, current))
 
     table.merge_cells(dash, 0, 0, 1, 0)
-    table.cell(dash, 0, 0,
-         active + "  ·  TRADING CENTRAL",
-         text_color=TXT, text_size=size.small, bgcolor=HDR, text_halign=text.align_left)
+    table.cell(dash, 0, 0, active + "  ·  TRADING CENTRAL", text_color=TXT, text_size=size.small, bgcolor=HDR, text_halign=text.align_left)
 
     table.merge_cells(dash, 0, 1, 1, 1)
-    table.cell(dash, 0, 1,
-         currentBias,
-         text_color=biasColor, text_size=size.normal, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 1, currentBias, text_color=biasColor, text_size=size.normal, bgcolor=BG, text_halign=text.align_left)
 
     table.cell(dash, 0, 2, "Pivot / invalidation", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 2, f_price(curPivot), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
     table.cell(dash, 0, 3, "Target 1", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 3, f_price(curT1), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
     table.cell(dash, 0, 4, "Target 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 4, f_price(curT2), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
     table.cell(dash, 0, 5, "Alternative 1", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 5, f_price(curAlt1), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
     table.cell(dash, 0, 6, "Alternative 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 6, f_price(curAlt2), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    string prefTxt = na(current) ? "" : array.get(PREF, current)
-    prefTxt := f_wrap_text(prefTxt, 46)
+    string prefTxt = na(current) ? "" : f_wrap_text(array.get(PREF, current), 34)
     table.merge_cells(dash, 0, 7, 1, 7)
-    table.cell(dash, 0, 7,
-         prefTxt == "" ? "" : "Preferred: " + prefTxt,
-         text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 7, prefTxt == "" ? "" : "Preferred: " + prefTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    string altTxt = na(current) ? "" : array.get(ALTTXT, current)
-    altTxt := f_wrap_text(altTxt, 46)
+    string altTxt = na(current) ? "" : f_wrap_text(array.get(ALTTXT, current), 34)
     table.merge_cells(dash, 0, 8, 1, 8)
-    table.cell(dash, 0, 8,
-         altTxt == "" ? "" : "Alternative: " + altTxt,
-         text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 8, altTxt == "" ? "" : "Alternative: " + altTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    string cmtTxt = (showComment and not na(current)) ? array.get(CMT, current) : ""
-    cmtTxt := f_wrap_text(cmtTxt, 46)
+    string cmtTxt = (showComment and not na(current)) ? f_wrap_text(array.get(CMT, current), 34) : ""
     table.merge_cells(dash, 0, 9, 1, 9)
-    table.cell(dash, 0, 9,
-         cmtTxt == "" ? "" : "Comment: " + cmtTxt,
-         text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 9, cmtTxt == "" ? "" : "Comment: " + cmtTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
     table.merge_cells(dash, 0, 10, 1, 10)
-    table.cell(dash, 0, 10,
-         "Updated: " + updateTime,
-         text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 10, "Updated: " + updateTime, text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
 
 // ============================================================================
 // HISTORY TABLE
@@ -1031,14 +1093,14 @@ if barstate.islast and showDash
 var table hist = table.new(
      position.bottom_right,
      5,
-     6,
+     5,
      border_width=1,
      border_color=BORDER,
      frame_color=BORDER,
      frame_width=1)
 
 if barstate.islast and showHistory
-    table.clear(hist, 0, 0, 4, 5)
+    table.clear(hist, 0, 0, 4, 4)
 
     table.cell(hist, 0, 0, "DATE / TIME", text_color=TXT, bgcolor=HDR)
     table.cell(hist, 1, 0, "BIAS", text_color=TXT, bgcolor=HDR)
@@ -1118,7 +1180,7 @@ async function exportPineScript() {
     // Keep only the last few captures per symbol — the full history made the
     // exported script too large to compile. `deduped` is chronological
     // ascending, so per symbol we keep the tail end (most recent) in order.
-    const MAX_PER_SYMBOL = 4;
+    const MAX_PER_SYMBOL = 4; // latest 4 captures per symbol
     const bySymbol = {};
     deduped.forEach(r => { (bySymbol[r.symbol] ||= []).push(r); });
     const capped = Object.values(bySymbol)
@@ -1150,7 +1212,7 @@ async function exportPineScript() {
 
     const optionsList = ALLOWED_SYMBOLS.map(s => `"${s}"`).join(',');
 
-    const detectChain = ALLOWED_SYMBOLS
+    const detectChain = uniqueSymbols
       .filter(s => s !== 'XAUUSD' && s !== 'XAGUSD')
       .map(s => `     str.contains(tv, "${s}") ? "${s}" :`)
       .join('\n');
