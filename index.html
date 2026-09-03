@@ -180,8 +180,7 @@ const TWELVE_DATA_SYMBOL_MAP = {
   EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', USDCHF: 'USD/CHF',
   AUDUSD: 'AUD/USD', NZDUSD: 'NZD/USD', USDCAD: 'USD/CAD',
   EURGBP: 'EUR/GBP', EURJPY: 'EUR/JPY', GBPJPY: 'GBP/JPY',
-  AUDJPY: 'AUD/JPY', AUDCHF: 'AUD/CHF', CHFJPY: 'CHF/JPY',
-  NZDJPY: 'NZD/JPY', GBPCHF: 'GBP/CHF', CADJPY: 'CAD/JPY', AUDNZD: 'AUD/NZD',
+  AUDJPY: 'AUD/JPY', AUDCHF: 'AUD/CHF',
 };
 
 // Only these symbols show up anywhere on the dashboard (tabs, overview, history,
@@ -189,7 +188,7 @@ const TWELVE_DATA_SYMBOL_MAP = {
 const ALLOWED_SYMBOLS = [
   'XAUUSD', 'XAGUSD',
   'EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDJPY', 'USDCHF',
-  'EURGBP', 'AUDJPY', 'EURJPY', 'CHFJPY', 'NZDJPY', 'GBPCHF', 'CADJPY', 'AUDNZD', 'AUDCHF',
+  'EURGBP', 'AUDJPY', 'EURJPY', 'GBPJPY', 'AUDCHF',
 ];
 
 if (SUPABASE_URL.includes('YOUR_PROJECT_REF')) {
@@ -624,7 +623,7 @@ indicator("Fusion Markets / Trading Central — Analyst View Historical Replay",
 //
 // Generated automatically from the Supabase pipeline — re-export any time
 // for a fresh snapshot; Pine Script cannot pull live data on its own. This
-// export dedupes unchanged captures and keeps only the last few per symbol.
+// export dedupes unchanged captures and keeps only the latest 4 per symbol.
 // ============================================================================
 
 string TZ = "GMT+3"
@@ -637,7 +636,6 @@ showLabels  = input.bool(false, "Show update labels", group="Chart")
 showDash    = input.bool(true, "Show dashboard", group="Dashboard")
 showComment = input.bool(true, "Show comment", group="Dashboard")
 showHistory = input.bool(true, "Show history table", group="Dashboard")
-historyRows = input.int(15, "History rows", minval=5, maxval=15, group="Dashboard")
 panelPos    = input.string(position.top_right, "Panel position",
      options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group="Dashboard")
 
@@ -654,9 +652,22 @@ color TXT     = color.white
 color BORDER  = color.rgb(65, 65, 75)
 color BUY     = color.lime
 color SELL    = color.red
-color FIB236  = color.rgb(200, 162, 230)
-color FIB5    = color.rgb(255, 140, 140)
-color FIB786  = color.rgb(135, 206, 250)
+
+// Fibonacci appearance — each level can be styled independently from Settings.
+fib236Color = input.color(color.rgb(200, 162, 230), "Fib 0.236 color", group="Fibonacci")
+fib236Style = input.string("Dotted", "Fib 0.236 style", options=["Solid", "Dashed", "Dotted"], group="Fibonacci")
+fib236Width = input.int(1, "Fib 0.236 width", minval=1, maxval=4, group="Fibonacci")
+
+fib5Color = input.color(color.rgb(255, 140, 140), "Fib 0.5 color", group="Fibonacci")
+fib5Style = input.string("Dotted", "Fib 0.5 style", options=["Solid", "Dashed", "Dotted"], group="Fibonacci")
+fib5Width = input.int(1, "Fib 0.5 width", minval=1, maxval=4, group="Fibonacci")
+
+fib786Color = input.color(color.rgb(135, 206, 250), "Fib 0.786 color", group="Fibonacci")
+fib786Style = input.string("Dotted", "Fib 0.786 style", options=["Solid", "Dashed", "Dotted"], group="Fibonacci")
+fib786Width = input.int(1, "Fib 0.786 width", minval=1, maxval=4, group="Fibonacci")
+
+f_line_style(string s) =>
+    s == "Solid" ? line.style_solid : s == "Dashed" ? line.style_dashed : line.style_dotted
 
 // ============================================================================
 // DATA
@@ -718,16 +729,29 @@ f_dt(int ts) =>
 f_price(float x) =>
     na(x) ? "-" : str.tostring(x, format.mintick)
 
-// Splits comment text into exactly 3 fixed-length lines (padded with "" if
-// short) so the comment area is always the same height — the panel no longer
-// resizes depending on how long the analyst's comment is.
-f_wrap3(string s) =>
-    int lineLen = 42
-    string l1 = str.length(s) > 0 ? str.substring(s, 0, math.min(lineLen, str.length(s))) : ""
-    string l2 = str.length(s) > lineLen ? str.substring(s, lineLen, math.min(lineLen * 2, str.length(s))) : ""
-    string l3rem = str.length(s) > lineLen * 2 ? str.substring(s, lineLen * 2, math.min(lineLen * 3, str.length(s))) : ""
-    string l3 = str.length(s) > lineLen * 3 ? l3rem + "…" : l3rem
-    [l1, l2, l3]
+// Word-aware wrapping for Preferred / Alternative / Comment.
+// Text is kept as a single dashboard cell, so it can occupy as many visual
+// lines as needed instead of being forced into exactly three rows.
+f_wrap_text(string s, int maxLen) =>
+    if str.length(s) == 0
+        ""
+    else
+        array<string> words = str.split(s, " ")
+        string result = ""
+        string currentLine = ""
+        if array.size(words) > 0
+            for i = 0 to array.size(words) - 1
+                string word = array.get(words, i)
+                if currentLine == ""
+                    currentLine := word
+                else if str.length(currentLine) + 1 + str.length(word) <= maxLen
+                    currentLine := currentLine + " " + word
+                else
+                    result := result == "" ? currentLine : result + "\n" + currentLine
+                    currentLine := word
+        if currentLine != ""
+            result := result == "" ? currentLine : result + "\n" + currentLine
+        result
 
 // ============================================================================
 // HISTORICAL LINES (+ Fibonacci levels for the active/current capture)
@@ -812,9 +836,9 @@ if barstate.islast
                             float f236 = pivot + (t1 - pivot) * 0.236
                             float f5   = pivot + (t1 - pivot) * 0.5
                             float f786 = pivot + (t1 - pivot) * 0.786
-                            array.push(histLines, line.new(startT, f236, endT, f236, xloc=xloc.bar_time, extend=extend.right, color=FIB236, style=line.style_dotted, width=1))
-                            array.push(histLines, line.new(startT, f5,   endT, f5,   xloc=xloc.bar_time, extend=extend.right, color=FIB5,   style=line.style_dotted, width=1))
-                            array.push(histLines, line.new(startT, f786, endT, f786, xloc=xloc.bar_time, extend=extend.right, color=FIB786, style=line.style_dotted, width=1))
+                            array.push(histLines, line.new(startT, f236, endT, f236, xloc=xloc.bar_time, extend=extend.right, color=fib236Color, style=f_line_style(fib236Style), width=fib236Width))
+                            array.push(histLines, line.new(startT, f5,   endT, f5,   xloc=xloc.bar_time, extend=extend.right, color=fib5Color, style=f_line_style(fib5Style), width=fib5Width))
+                            array.push(histLines, line.new(startT, f786, endT, f786, xloc=xloc.bar_time, extend=extend.right, color=fib786Color, style=f_line_style(fib786Style), width=fib786Width))
 
 // ============================================================================
 // CURRENT VIEW + STATISTICS
@@ -927,16 +951,15 @@ if array.size(touchedNow) > 0
     alert(active + " touched: " + array.join(touchedNow, ", "), alert.freq_once_per_bar)
 
 // ============================================================================
-// DASHBOARD — mirrors the browser overlay panel: symbol header, colored bias,
-// Pivot/T1/T2/Alt1/Alt2 grid, Fib levels, then Preferred / Alternative /
-// Comment (comment always takes exactly 3 rows so the panel size never
-// changes depending on comment length).
+// DASHBOARD — Trading Central / Fusion Markets style
+// The card mirrors the supplied screenshot: compact level grid followed by
+// fluid Preferred / Alternative / Comment paragraphs and the update time.
 // ============================================================================
 
 var table dash = table.new(
      panelPos,
      2,
-     16,
+     11,
      bgcolor=BG,
      border_width=1,
      border_color=BORDER,
@@ -944,17 +967,21 @@ var table dash = table.new(
      frame_width=1)
 
 if barstate.islast and showDash
-    table.clear(dash, 0, 0, 1, 15)
+    table.clear(dash, 0, 0, 1, 10)
 
     string currentBias = na(current) ? "NO DATA" : f_bias(array.get(O, current))
     color biasColor = na(current) ? color.orange : array.get(O, current) == 1 ? BUY : array.get(O, current) == -1 ? SELL : color.gray
     string updateTime = na(current) ? "-" : f_dt(array.get(T, current))
 
     table.merge_cells(dash, 0, 0, 1, 0)
-    table.cell(dash, 0, 0, active + "  ·  TRADING CENTRAL", text_color=TXT, text_size=size.small, bgcolor=HDR, text_halign=text.align_left)
+    table.cell(dash, 0, 0,
+         active + "  ·  TRADING CENTRAL",
+         text_color=TXT, text_size=size.small, bgcolor=HDR, text_halign=text.align_left)
 
     table.merge_cells(dash, 0, 1, 1, 1)
-    table.cell(dash, 0, 1, currentBias, text_color=biasColor, text_size=size.normal, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 1,
+         currentBias,
+         text_color=biasColor, text_size=size.normal, bgcolor=BG, text_halign=text.align_left)
 
     table.cell(dash, 0, 2, "Pivot / invalidation", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 2, f_price(curPivot), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
@@ -971,34 +998,31 @@ if barstate.islast and showDash
     table.cell(dash, 0, 6, "Alternative 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
     table.cell(dash, 1, 6, f_price(curAlt2), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.cell(dash, 0, 7, "Fib 0.236", text_color=FIB236, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 7, showFib ? f_price(curFib236) : "off", text_color=FIB236, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
-    table.cell(dash, 0, 8, "Fib 0.5", text_color=FIB5, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 8, showFib ? f_price(curFib5) : "off", text_color=FIB5, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
-    table.cell(dash, 0, 9, "Fib 0.786", text_color=FIB786, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 9, showFib ? f_price(curFib786) : "off", text_color=FIB786, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
-
-    table.merge_cells(dash, 0, 10, 1, 10)
     string prefTxt = na(current) ? "" : array.get(PREF, current)
-    table.cell(dash, 0, 10, prefTxt == "" ? "" : "Preferred: " + prefTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    prefTxt := f_wrap_text(prefTxt, 46)
+    table.merge_cells(dash, 0, 7, 1, 7)
+    table.cell(dash, 0, 7,
+         prefTxt == "" ? "" : "Preferred: " + prefTxt,
+         text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    table.merge_cells(dash, 0, 11, 1, 11)
     string altTxt = na(current) ? "" : array.get(ALTTXT, current)
-    table.cell(dash, 0, 11, altTxt == "" ? "" : "Alternative: " + altTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    altTxt := f_wrap_text(altTxt, 46)
+    table.merge_cells(dash, 0, 8, 1, 8)
+    table.cell(dash, 0, 8,
+         altTxt == "" ? "" : "Alternative: " + altTxt,
+         text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
     string cmtTxt = (showComment and not na(current)) ? array.get(CMT, current) : ""
-    [cLine1, cLine2, cLine3] = f_wrap3(cmtTxt)
-    table.merge_cells(dash, 0, 12, 1, 12)
-    table.cell(dash, 0, 12, cLine1 == "" ? "" : "Comment: " + cLine1, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.merge_cells(dash, 0, 13, 1, 13)
-    table.cell(dash, 0, 13, cLine2, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.merge_cells(dash, 0, 14, 1, 14)
-    table.cell(dash, 0, 14, cLine3, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    cmtTxt := f_wrap_text(cmtTxt, 46)
+    table.merge_cells(dash, 0, 9, 1, 9)
+    table.cell(dash, 0, 9,
+         cmtTxt == "" ? "" : "Comment: " + cmtTxt,
+         text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
 
-    table.merge_cells(dash, 0, 15, 1, 15)
-    table.cell(dash, 0, 15, "Updated: " + updateTime, text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
+    table.merge_cells(dash, 0, 10, 1, 10)
+    table.cell(dash, 0, 10,
+         "Updated: " + updateTime,
+         text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
 
 // ============================================================================
 // HISTORY TABLE
@@ -1007,14 +1031,14 @@ if barstate.islast and showDash
 var table hist = table.new(
      position.bottom_right,
      5,
-     17,
+     6,
      border_width=1,
      border_color=BORDER,
      frame_color=BORDER,
      frame_width=1)
 
 if barstate.islast and showHistory
-    table.clear(hist, 0, 0, 4, 16)
+    table.clear(hist, 0, 0, 4, 5)
 
     table.cell(hist, 0, 0, "DATE / TIME", text_color=TXT, bgcolor=HDR)
     table.cell(hist, 1, 0, "BIAS", text_color=TXT, bgcolor=HDR)
@@ -1029,7 +1053,7 @@ if barstate.islast and showHistory
         for k = 0 to n2 - 1
             int z = n2 - 1 - k
 
-            if shown < historyRows and array.get(S, z) == active
+            if shown < 4 and array.get(S, z) == active
                 int dd = array.get(O, z)
 
                 table.cell(hist, 0, row, f_dt(array.get(T, z)),
@@ -1094,7 +1118,7 @@ async function exportPineScript() {
     // Keep only the last few captures per symbol — the full history made the
     // exported script too large to compile. `deduped` is chronological
     // ascending, so per symbol we keep the tail end (most recent) in order.
-    const MAX_PER_SYMBOL = 6;
+    const MAX_PER_SYMBOL = 4;
     const bySymbol = {};
     deduped.forEach(r => { (bySymbol[r.symbol] ||= []).push(r); });
     const capped = Object.values(bySymbol)
@@ -1124,9 +1148,9 @@ async function exportPineScript() {
       return `    f_add("${r.symbol}", ${ts}, ${dir}, ${p}, ${a}, ${b}, ${c}, ${d}, "${pref}", "${alttxt}", "${cmt}", "${id}")`;
     }).join('\n');
 
-    const optionsList = uniqueSymbols.map(s => `"${s}"`).join(',');
+    const optionsList = ALLOWED_SYMBOLS.map(s => `"${s}"`).join(',');
 
-    const detectChain = uniqueSymbols
+    const detectChain = ALLOWED_SYMBOLS
       .filter(s => s !== 'XAUUSD' && s !== 'XAGUSD')
       .map(s => `     str.contains(tv, "${s}") ? "${s}" :`)
       .join('\n');
