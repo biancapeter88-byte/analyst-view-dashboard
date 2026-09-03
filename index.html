@@ -623,19 +623,23 @@ indicator("Fusion Markets / Trading Central — Analyst View Historical Replay",
 // Times are stored in UTC and displayed in Romania time (UTC+3).
 //
 // Generated automatically from the Supabase pipeline — re-export any time
-// for a fresh snapshot; Pine Script cannot pull live data on its own.
+// for a fresh snapshot; Pine Script cannot pull live data on its own. This
+// export dedupes unchanged captures and keeps only the last few per symbol.
 // ============================================================================
 
 string TZ = "GMT+3"
 
 showPivot   = input.bool(true, "Show Pivot / Key Level", group="Chart")
 showTargets = input.bool(true, "Show T1 / T2", group="Chart")
+showFib     = input.bool(true, "Show Fibonacci levels (pivot → TP1)", group="Chart")
 showLabels  = input.bool(false, "Show update labels", group="Chart")
 
 showDash    = input.bool(true, "Show dashboard", group="Dashboard")
 showComment = input.bool(true, "Show comment", group="Dashboard")
 showHistory = input.bool(true, "Show history table", group="Dashboard")
 historyRows = input.int(15, "History rows", minval=5, maxval=15, group="Dashboard")
+panelPos    = input.string(position.top_right, "Panel position",
+     options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group="Dashboard")
 
 autoSymbol = input.bool(true, "Auto-detect chart symbol", group="Symbol")
 manualSymbol = input.string(
@@ -644,12 +648,15 @@ manualSymbol = input.string(
      options=[__OPTIONS_LIST__],
      group="Symbol")
 
-color BG = color.rgb(15, 15, 20)
-color HDR = color.rgb(5, 5, 9)
-color TXT = color.white
-color BORDER = color.rgb(65, 65, 75)
-color BUY = color.lime
-color SELL = color.red
+color BG      = color.rgb(15, 15, 20)
+color HDR     = color.rgb(5, 5, 9)
+color TXT     = color.white
+color BORDER  = color.rgb(65, 65, 75)
+color BUY     = color.lime
+color SELL    = color.red
+color FIB236  = color.rgb(200, 162, 230)
+color FIB5    = color.rgb(255, 140, 140)
+color FIB786  = color.rgb(135, 206, 250)
 
 // ============================================================================
 // DATA
@@ -711,8 +718,19 @@ f_dt(int ts) =>
 f_price(float x) =>
     na(x) ? "-" : str.tostring(x, format.mintick)
 
+// Splits comment text into exactly 3 fixed-length lines (padded with "" if
+// short) so the comment area is always the same height — the panel no longer
+// resizes depending on how long the analyst's comment is.
+f_wrap3(string s) =>
+    int lineLen = 42
+    string l1 = str.length(s) > 0 ? str.substring(s, 0, math.min(lineLen, str.length(s))) : ""
+    string l2 = str.length(s) > lineLen ? str.substring(s, lineLen, math.min(lineLen * 2, str.length(s))) : ""
+    string l3rem = str.length(s) > lineLen * 2 ? str.substring(s, lineLen * 2, math.min(lineLen * 3, str.length(s))) : ""
+    string l3 = str.length(s) > lineLen * 3 ? l3rem + "…" : l3rem
+    [l1, l2, l3]
+
 // ============================================================================
-// HISTORICAL LINES
+// HISTORICAL LINES (+ Fibonacci levels for the active/current capture)
 // ============================================================================
 
 var line[] histLines = array.new_line()
@@ -787,6 +805,17 @@ if barstate.islast
                                  textcolor=color.white,
                                  color=c))
 
+                        // This is the active symbol's most recent capture (no later
+                        // one exists) — draw the 3 Fib levels between pivot and TP1,
+                        // pinned and extending to the right like the other lines.
+                        if na(nextT) and showFib and not na(pivot) and not na(t1)
+                            float f236 = pivot + (t1 - pivot) * 0.236
+                            float f5   = pivot + (t1 - pivot) * 0.5
+                            float f786 = pivot + (t1 - pivot) * 0.786
+                            array.push(histLines, line.new(startT, f236, endT, f236, xloc=xloc.bar_time, extend=extend.right, color=FIB236, style=line.style_dotted, width=1))
+                            array.push(histLines, line.new(startT, f5,   endT, f5,   xloc=xloc.bar_time, extend=extend.right, color=FIB5,   style=line.style_dotted, width=1))
+                            array.push(histLines, line.new(startT, f786, endT, f786, xloc=xloc.bar_time, extend=extend.right, color=FIB786, style=line.style_dotted, width=1))
+
 // ============================================================================
 // CURRENT VIEW + STATISTICS
 // ============================================================================
@@ -829,18 +858,85 @@ if n2 > 0
 
             if tt <= time
                 if na(currentTime) or tt > currentTime
-                    current = i
+                    current := i
                     currentTime := tt
+
+float curPivot = na(current) ? na : array.get(P, current)
+float curT1    = na(current) ? na : array.get(A, current)
+float curT2    = na(current) ? na : array.get(B, current)
+float curAlt1  = na(current) ? na : array.get(C, current)
+float curAlt2  = na(current) ? na : array.get(D, current)
+float curFib236 = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.236 : na
+float curFib5   = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.5   : na
+float curFib786 = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - curPivot) * 0.786 : na
+
+// ============================================================================
+// UNIFIED DAILY ALERT
+// One combined alert() call for whatever levels are touched on a given bar —
+// not a separate alert per level. Each level fires at most once per day (the
+// first touch); flags reset at the start of a new trading day. Covers pivot,
+// TP1, TP2, both alternatives, and Fib 0.236 / 0.786. Add a TradingView alert
+// on this indicator with condition "Any alert() function call" — alert()
+// alone doesn't push a notification unless that platform alert is armed.
+// ============================================================================
+
+var bool alertedPivot  = false
+var bool alertedT1     = false
+var bool alertedT2     = false
+var bool alertedAlt1   = false
+var bool alertedAlt2   = false
+var bool alertedFib236 = false
+var bool alertedFib786 = false
+
+bool newDay = ta.change(time("D")) != 0
+if newDay
+    alertedPivot  := false
+    alertedT1     := false
+    alertedT2     := false
+    alertedAlt1   := false
+    alertedAlt2   := false
+    alertedFib236 := false
+    alertedFib786 := false
+
+var string[] touchedNow = array.new_string()
+array.clear(touchedNow)
+
+if not alertedPivot and not na(curPivot) and low <= curPivot and high >= curPivot
+    array.push(touchedNow, "Pivot " + str.tostring(curPivot, format.mintick))
+    alertedPivot := true
+if not alertedT1 and not na(curT1) and low <= curT1 and high >= curT1
+    array.push(touchedNow, "TP1 " + str.tostring(curT1, format.mintick))
+    alertedT1 := true
+if not alertedT2 and not na(curT2) and low <= curT2 and high >= curT2
+    array.push(touchedNow, "TP2 " + str.tostring(curT2, format.mintick))
+    alertedT2 := true
+if not alertedAlt1 and not na(curAlt1) and low <= curAlt1 and high >= curAlt1
+    array.push(touchedNow, "Alt1 " + str.tostring(curAlt1, format.mintick))
+    alertedAlt1 := true
+if not alertedAlt2 and not na(curAlt2) and low <= curAlt2 and high >= curAlt2
+    array.push(touchedNow, "Alt2 " + str.tostring(curAlt2, format.mintick))
+    alertedAlt2 := true
+if showFib and not alertedFib236 and not na(curFib236) and low <= curFib236 and high >= curFib236
+    array.push(touchedNow, "Fib 0.236 " + str.tostring(curFib236, format.mintick))
+    alertedFib236 := true
+if showFib and not alertedFib786 and not na(curFib786) and low <= curFib786 and high >= curFib786
+    array.push(touchedNow, "Fib 0.786 " + str.tostring(curFib786, format.mintick))
+    alertedFib786 := true
+
+if array.size(touchedNow) > 0
+    alert(active + " touched: " + array.join(touchedNow, ", "), alert.freq_once_per_bar)
 
 // ============================================================================
 // DASHBOARD — mirrors the browser overlay panel: symbol header, colored bias,
-// Pivot/T1/T2/Alt1/Alt2 grid, then Preferred / Alternative / Comment text.
+// Pivot/T1/T2/Alt1/Alt2 grid, Fib levels, then Preferred / Alternative /
+// Comment (comment always takes exactly 3 rows so the panel size never
+// changes depending on comment length).
 // ============================================================================
 
 var table dash = table.new(
-     position.top_right,
+     panelPos,
      2,
-     11,
+     16,
      bgcolor=BG,
      border_width=1,
      border_color=BORDER,
@@ -848,7 +944,7 @@ var table dash = table.new(
      frame_width=1)
 
 if barstate.islast and showDash
-    table.clear(dash, 0, 0, 1, 10)
+    table.clear(dash, 0, 0, 1, 15)
 
     string currentBias = na(current) ? "NO DATA" : f_bias(array.get(O, current))
     color biasColor = na(current) ? color.orange : array.get(O, current) == 1 ? BUY : array.get(O, current) == -1 ? SELL : color.gray
@@ -861,34 +957,48 @@ if barstate.islast and showDash
     table.cell(dash, 0, 1, currentBias, text_color=biasColor, text_size=size.normal, bgcolor=BG, text_halign=text.align_left)
 
     table.cell(dash, 0, 2, "Pivot / invalidation", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 2, na(current) ? "-" : f_price(array.get(P, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
+    table.cell(dash, 1, 2, f_price(curPivot), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
     table.cell(dash, 0, 3, "Target 1", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 3, na(current) ? "-" : f_price(array.get(A, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
+    table.cell(dash, 1, 3, f_price(curT1), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
     table.cell(dash, 0, 4, "Target 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 4, na(current) ? "-" : f_price(array.get(B, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
+    table.cell(dash, 1, 4, f_price(curT2), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
     table.cell(dash, 0, 5, "Alternative 1", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 5, na(current) ? "-" : f_price(array.get(C, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
+    table.cell(dash, 1, 5, f_price(curAlt1), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
     table.cell(dash, 0, 6, "Alternative 2", text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
-    table.cell(dash, 1, 6, na(current) ? "-" : f_price(array.get(D, current)), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
+    table.cell(dash, 1, 6, f_price(curAlt2), text_color=TXT, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.merge_cells(dash, 0, 7, 1, 7)
-    string prefTxt = na(current) ? "" : array.get(PREF, current)
-    table.cell(dash, 0, 7, prefTxt == "" ? "" : "Preferred: " + prefTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 7, "Fib 0.236", text_color=FIB236, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 7, showFib ? f_price(curFib236) : "off", text_color=FIB236, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.merge_cells(dash, 0, 8, 1, 8)
-    string altTxt = na(current) ? "" : array.get(ALTTXT, current)
-    table.cell(dash, 0, 8, altTxt == "" ? "" : "Alternative: " + altTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 8, "Fib 0.5", text_color=FIB5, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 8, showFib ? f_price(curFib5) : "off", text_color=FIB5, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
-    table.merge_cells(dash, 0, 9, 1, 9)
-    string cmtTxt = na(current) ? "" : array.get(CMT, current)
-    table.cell(dash, 0, 9, (showComment and cmtTxt != "") ? "Comment: " + cmtTxt : "", text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 0, 9, "Fib 0.786", text_color=FIB786, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.cell(dash, 1, 9, showFib ? f_price(curFib786) : "off", text_color=FIB786, text_size=size.small, bgcolor=BG, text_halign=text.align_right)
 
     table.merge_cells(dash, 0, 10, 1, 10)
-    table.cell(dash, 0, 10, "Updated: " + updateTime, text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
+    string prefTxt = na(current) ? "" : array.get(PREF, current)
+    table.cell(dash, 0, 10, prefTxt == "" ? "" : "Preferred: " + prefTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+
+    table.merge_cells(dash, 0, 11, 1, 11)
+    string altTxt = na(current) ? "" : array.get(ALTTXT, current)
+    table.cell(dash, 0, 11, altTxt == "" ? "" : "Alternative: " + altTxt, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+
+    string cmtTxt = (showComment and not na(current)) ? array.get(CMT, current) : ""
+    [cLine1, cLine2, cLine3] = f_wrap3(cmtTxt)
+    table.merge_cells(dash, 0, 12, 1, 12)
+    table.cell(dash, 0, 12, cLine1 == "" ? "" : "Comment: " + cLine1, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.merge_cells(dash, 0, 13, 1, 13)
+    table.cell(dash, 0, 13, cLine2, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+    table.merge_cells(dash, 0, 14, 1, 14)
+    table.cell(dash, 0, 14, cLine3, text_color=color.silver, text_size=size.small, bgcolor=BG, text_halign=text.align_left)
+
+    table.merge_cells(dash, 0, 15, 1, 15)
+    table.cell(dash, 0, 15, "Updated: " + updateTime, text_color=TXT, text_size=size.tiny, bgcolor=BG, text_halign=text.align_left)
 
 // ============================================================================
 // HISTORY TABLE
@@ -981,7 +1091,17 @@ async function exportPineScript() {
       return true;
     });
 
-    const dataLines = deduped.map(r => {
+    // Keep only the last few captures per symbol — the full history made the
+    // exported script too large to compile. `deduped` is chronological
+    // ascending, so per symbol we keep the tail end (most recent) in order.
+    const MAX_PER_SYMBOL = 6;
+    const bySymbol = {};
+    deduped.forEach(r => { (bySymbol[r.symbol] ||= []).push(r); });
+    const capped = Object.values(bySymbol)
+      .flatMap(rows => rows.slice(-MAX_PER_SYMBOL))
+      .sort((a, b) => new Date(a.captured_at) - new Date(b.captured_at));
+
+    const dataLines = capped.map(r => {
       const raw = r.raw_data || {};
       const ts = raw.date ? new Date(raw.date).getTime() : new Date(r.captured_at).getTime();
       const dirNum = Number(raw.opinionIntraday);
