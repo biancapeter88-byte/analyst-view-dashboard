@@ -899,8 +899,7 @@ float curFib786 = (not na(curPivot) and not na(curT1)) ? curPivot + (curT1 - cur
 // live high/low series and its own current Analyst View capture.
 // ============================================================================
 
-// Feed used for the live cross-symbol checks. The default matches the OANDA
-// feed shown in the supplied TradingView screenshots.
+// Feed used for the live cross-symbol checks. The default is Fusion Markets.
 alertFeed = input.string("FUSIONMARKETS:", "Alert data feed prefix", group="Alerts")
 alertOnPivot = input.bool(true, "Pivot", group="Alerts")
 alertOnTargets = input.bool(true, "Targets", group="Alerts")
@@ -923,11 +922,15 @@ f_current_for_symbol(string sym) =>
 
 f_add_alert_part(string base, string key, string partText, bool touched, bool enabled, string state) =>
     string out = base
-    string nextState = state
     if enabled and touched and not str.contains("|" + state + "|", "|" + key + "|")
         out := out == "" ? partText : out + ", " + partText
+    out
+
+f_add_alert_state(string key, bool touched, bool enabled, string state) =>
+    string nextState = state
+    if enabled and touched and not str.contains("|" + state + "|", "|" + key + "|")
         nextState := state == "" ? key : state + "|" + key
-    [out, nextState]
+    nextState
 
 // The 14 request.security() calls are explicit so the generated indicator
 // stays deterministic and well below TradingView's unique-request limit.
@@ -972,13 +975,20 @@ f_check_symbol(string sym, float hi, float lo, int stateIndex) =>
         float fib236 = (not na(pivot) and not na(t1)) ? pivot + (t1 - pivot) * 0.236 : na
         float fib786 = (not na(pivot) and not na(t1)) ? pivot + (t1 - pivot) * 0.786 : na
 
-        [msg, state] = f_add_alert_part(msg, "P", "Pivot " + f_price(pivot), not na(pivot) and lo <= pivot and hi >= pivot, alertOnPivot, state)
-        [msg, state] = f_add_alert_part(msg, "T1", "TP1 " + f_price(t1), not na(t1) and lo <= t1 and hi >= t1, alertOnTargets, state)
-        [msg, state] = f_add_alert_part(msg, "T2", "TP2 " + f_price(t2), not na(t2) and lo <= t2 and hi >= t2, alertOnTargets, state)
-        [msg, state] = f_add_alert_part(msg, "A1", "Alt1 " + f_price(alt1), not na(alt1) and lo <= alt1 and hi >= alt1, alertOnAlternatives, state)
-        [msg, state] = f_add_alert_part(msg, "A2", "Alt2 " + f_price(alt2), not na(alt2) and lo <= alt2 and hi >= alt2, alertOnAlternatives, state)
-        [msg, state] = f_add_alert_part(msg, "F236", "Fib 0.236 " + f_price(fib236), not na(fib236) and lo <= fib236 and hi >= fib236, alertOnFib, state)
-        [msg, state] = f_add_alert_part(msg, "F786", "Fib 0.786 " + f_price(fib786), not na(fib786) and lo <= fib786 and hi >= fib786, alertOnFib, state)
+        msg := f_add_alert_part(msg, "P", "Pivot " + f_price(pivot), not na(pivot) and lo <= pivot and hi >= pivot, alertOnPivot, state)
+        state := f_add_alert_state("P", not na(pivot) and lo <= pivot and hi >= pivot, alertOnPivot, state)
+        msg := f_add_alert_part(msg, "T1", "TP1 " + f_price(t1), not na(t1) and lo <= t1 and hi >= t1, alertOnTargets, state)
+        state := f_add_alert_state("T1", not na(t1) and lo <= t1 and hi >= t1, alertOnTargets, state)
+        msg := f_add_alert_part(msg, "T2", "TP2 " + f_price(t2), not na(t2) and lo <= t2 and hi >= t2, alertOnTargets, state)
+        state := f_add_alert_state("T2", not na(t2) and lo <= t2 and hi >= t2, alertOnTargets, state)
+        msg := f_add_alert_part(msg, "A1", "Alt1 " + f_price(alt1), not na(alt1) and lo <= alt1 and hi >= alt1, alertOnAlternatives, state)
+        state := f_add_alert_state("A1", not na(alt1) and lo <= alt1 and hi >= alt1, alertOnAlternatives, state)
+        msg := f_add_alert_part(msg, "A2", "Alt2 " + f_price(alt2), not na(alt2) and lo <= alt2 and hi >= alt2, alertOnAlternatives, state)
+        state := f_add_alert_state("A2", not na(alt2) and lo <= alt2 and hi >= alt2, alertOnAlternatives, state)
+        msg := f_add_alert_part(msg, "F236", "Fib 0.236 " + f_price(fib236), not na(fib236) and lo <= fib236 and hi >= fib236, alertOnFib, state)
+        state := f_add_alert_state("F236", not na(fib236) and lo <= fib236 and hi >= fib236, alertOnFib, state)
+        msg := f_add_alert_part(msg, "F786", "Fib 0.786 " + f_price(fib786), not na(fib786) and lo <= fib786 and hi >= fib786, alertOnFib, state)
+        state := f_add_alert_state("F786", not na(fib786) and lo <= fib786 and hi >= fib786, alertOnFib, state)
 
         array.set(alertedState, stateIndex, state)
     msg
@@ -1212,7 +1222,7 @@ async function exportPineScript() {
 
     const optionsList = ALLOWED_SYMBOLS.map(s => `"${s}"`).join(',');
 
-    const detectChain = uniqueSymbols
+    const detectChain = ALLOWED_SYMBOLS
       .filter(s => s !== 'XAUUSD' && s !== 'XAGUSD')
       .map(s => `     str.contains(tv, "${s}") ? "${s}" :`)
       .join('\n');
