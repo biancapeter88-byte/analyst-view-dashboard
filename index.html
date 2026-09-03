@@ -921,11 +921,11 @@ f_current_for_symbol(string sym) =>
                     idx := i
     idx
 
-f_add_alert_part(string base, string key, string text, bool touched, bool enabled, string state) =>
+f_add_alert_part(string base, string key, string partText, bool touched, bool enabled, string state) =>
     string out = base
     string nextState = state
     if enabled and touched and not str.contains("|" + state + "|", "|" + key + "|")
-        out := out == "" ? text : out + ", " + text
+        out := out == "" ? partText : out + ", " + partText
         nextState := state == "" ? key : state + "|" + key
     [out, nextState]
 
